@@ -13,7 +13,7 @@ function Read-ScriptParameters {
         $UnsetParams = Compare-Object -ReferenceObject $($ScriptParams.Keys) -DifferenceObject $($PSBoundParameters.Keys)
     }
     else {
-        $UnsetParams = (Compare-Object -ReferenceObject $($ScriptParams.Keys) -DifferenceObject (@{v123p32 = "" }).Keys | ? { $_.SideIndicator -eq '<=' })
+        $UnsetParams = (Compare-Object -ReferenceObject $($ScriptParams.Keys) -DifferenceObject (@{v123p32 = "" }).Keys | Where-Object { $_.SideIndicator -eq '<=' })
     }
     foreach ($item in $UnsetParams) {
         $Param = $ScriptParams[$item.InputObject]
