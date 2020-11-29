@@ -69,7 +69,8 @@ Description = 'My Install Tools Library'
 # NestedModules = @()
 
 # Functions to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no functions to export.
-FunctionsToExport = 'Get-DownloadFolder', 'New-File', 'New-Shortcut', 'New-StartTile', 
+FunctionsToExport = 'Get-DownloadFolder', 'Get-Version', 'Get-Installer', 'New-File', 
+               'Set-ODBCConnection', 'New-Shortcut', 'New-StartTile', 
                'Read-ScriptParameters', 'Test-PendingReboot'
 
 # Cmdlets to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no cmdlets to export.
