@@ -1,4 +1,5 @@
 function Get-SharepointFolder {
+    [OutputType("System.Collections.ArrayList")]
     [CmdletBinding()]
     param (
         [uri]
@@ -14,6 +15,8 @@ function Get-SharepointFolder {
     Write-Verbose $SharePointSite
     $Stoploop = $false
     [int]$Retrycount = "0"
+    $x = CredMan -GetCred -Target "$($URI.Scheme)://$($URI.DnsSafeHost)/"
+    if (!($x)) {Write-Output "Credentials for Sharepoint Site $($URI.Scheme)://$($URI.DnsSafeHost)/"}
 
     do {
         try {
@@ -29,7 +32,11 @@ function Get-SharepointFolder {
                     ($PSItem.CategoryInfo.Reason -eq 'WebException' -and $PSItem.Exception.Message -like '*(403)*')
                 ))
             if ($Retry) {
+                if ($x) {
+                    credman -DelCred -Target "$($URI.Scheme)://$($URI.DnsSafeHost)/"
+                }
                 Write-Error $PSItem.Exception.Message
+                Write-Output "Please enter credentials for Sharepoint Site $($URI.Scheme)://$($URI.DnsSafeHost)/"
                 Start-Sleep -Seconds 1
                 $Retrycount++
             }
@@ -43,8 +50,10 @@ function Get-SharepointFolder {
     $Result = New-Object -TypeName "System.Collections.ArrayList"
     $DownloadFolder = Get-DownloadFolder
     foreach ($file in $files) {
-        Get-PnPFile -Url $file.ServerRelativeURL -AsFile -Force -Path ($DownloadFolder)
-        $Result.Add((Get-ChildItem (Join-Path $DownloadFolder $file.Name ))) | Out-Null
+        IF (!($file.Name.EndsWith('.aspx'))) {
+            Get-PnPFile -Url $file.ServerRelativeURL -AsFile -Force -Path ($DownloadFolder)
+            $Result.Add((Get-ChildItem (Join-Path $DownloadFolder $file.Name ))) | Out-Null
+        }
     }
     Disconnect-PnPOnline
     $Result

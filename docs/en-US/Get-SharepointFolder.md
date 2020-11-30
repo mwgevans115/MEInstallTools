@@ -13,7 +13,7 @@ schema: 2.0.0
 ## SYNTAX
 
 ```
-Get-SharepointFolder [[-SiteURI] <Uri>] [[-SharepointFolder] <String>] [<CommonParameters>]
+Get-SharepointFolder [[-SiteURI] <Uri>] [[-DocumentFolder] <String>] [<CommonParameters>]
 ```
 
 ## DESCRIPTION
@@ -30,8 +30,8 @@ PS C:\> {{ Add example code here }}
 
 ## PARAMETERS
 
-### -SharepointFolder
-{{ Fill SharepointFolder Description }}
+### -DocumentFolder
+{{ Fill DocumentFolder Description }}
 
 ```yaml
 Type: String
