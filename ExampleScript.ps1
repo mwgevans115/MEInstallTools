@@ -6,6 +6,7 @@ param (
     [Parameter(HelpMessage="Test Parameter 1")]
     [string]
     $Test1 = "Fred"
+
 )
 Remove-Module MEInstallTools -Force -ErrorAction SilentlyContinue
 Import-Module .\src\MEInstallTools.psd1
@@ -13,5 +14,7 @@ Import-Module .\src\MEInstallTools.psd1
 #Read-ScriptParameters $MyInvocation.MyCommand.Parameters $PSBoundParameters
 # $x = New-Shortcut -TargetPath 'C:\MNP\Software\ICE.exe' -ShortcutFolder 'Test'
 # New-StartTile -Shortcut $x -Group 'Fred' -Verbose
-Get-Installer 'https://aka.ms/vs/16/release/vc_redist.x64.exe' -Verbose
+# Get-Installer 'https://aka.ms/vs/16/release/vc_redist.x64.exe' -Verbose
+$x = [uri]'https://madspaniels.sharepoint.com/TeamSite/'
+Get-SharepointFolder -SiteURI $x -DocumentFolder 'Documents'
 Remove-Module MEInstallTools -Force
