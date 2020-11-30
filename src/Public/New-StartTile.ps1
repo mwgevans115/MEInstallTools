@@ -76,7 +76,7 @@ function New-StartTile {
         #    Start-Sleep -Milliseconds 10
         #}
         # wait for explorer to start
-        Start-Sleep -Milliseconds 100
+        Start-Sleep -Milliseconds 500
         $i = 0
         while (!(Get-Process -Name explorer -ErrorAction SilentlyContinue)) {
             Write-Progress -Activity 'Restarting Explorer' -PercentComplete -1

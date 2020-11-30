@@ -45,7 +45,9 @@ function New-Shortcut {
             $ShortcutRoot = [Environment]::GetFolderPath([System.Environment+SpecialFolder]::StartMenu)
         }
     }
-    $ShortcutRoot = Join-Path $ShortcutRoot 'Programs'
+    If (!($Desktop)){
+        $ShortcutRoot = Join-Path $ShortcutRoot 'Programs'
+    }
     if ($ShortcutFolder) {
         $ShortcutRoot = Join-Path $ShortcutRoot $ShortcutFolder
         New-Item -Path $ShortcutRoot -ItemType Directory -Force | Out-Null

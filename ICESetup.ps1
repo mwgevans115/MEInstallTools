@@ -1,16 +1,4 @@
 param (
-    # Specifies a path to one or more locations. Unlike the Path parameter, the value of the LiteralPath parameter is
-    # used exactly as it is typed. No characters are interpreted as wildcards. If the path includes escape characters,
-    # enclose it in single quotation marks. Single quotation marks tell Windows PowerShell not to interpret any
-    # characters as escape sequences.
-    #[Parameter(Mandatory=$true,
-    #           Position=0,
-    #           ParameterSetName="LiteralPath",
-    #           ValueFromPipelineByPropertyName=$true,
-    #           HelpMessage="Literal path to one or more locations.")]
-    #[Alias("PSPath")]
-    #[ValidateNotNullOrEmpty()]
-    #[string[]]
     [Parameter( Position = 4,
     HelpMessage = "Application Name (Icon)")]
     $ShortcutName = "ICE",
@@ -54,7 +42,16 @@ Set-ODBCConnection -DBName 'OrderActive' -ServerInstance $DBServerInstance
 
 $Application = Get-ChildItem (Join-Path $SoftwarePath '*') -Include 'Ice.exe'
 $AppShortcut = New-Shortcut -Target $Application -ShortcutFolder $StartMenuFolder -AllUsers -ShortcutName $ShortcutName
-New-Shortcut -Target $AppShortcut -Desktop -ShortcutName $ShortcutName
+$DesktopShortcut = New-Shortcut -Target $AppShortcut -Desktop -ShortcutName $ShortcutName -AllUsers
 New-StartTile -Shortcut $AppShortcut -Group $StartPinGroup
+$DesktopShortcut | Out-Null
 
+# Check for Config
+if (!(Test-Path (Join-Path $SoftwarePath 'config\MNPConfig.XML') -PathType Leaf)) {
+    Start-Process $Application.FullName
+}
+# Check for License
+if (!(Test-Path (Join-Path $SoftwarePath 'config\license.mnp') -PathType Leaf)) {
+    Write-Warning 'Application Not Licensed'
+}
 Remove-Module MEInstallTools -Force
