@@ -70,8 +70,9 @@ Description = 'My Install Tools Library'
 
 # Functions to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no functions to export.
 FunctionsToExport = 'Get-DownloadFolder', 'Get-Installer', 'Get-SharepointFolder', 
-               'Get-Version', 'New-File', 'Set-ODBCConnection', 'New-Shortcut', 
-               'New-StartTile', 'Read-ScriptParameters', 'Test-PendingReboot'
+               'Get-Version', 'Install-Software', 'New-File', 'Set-ODBCConnection', 
+               'New-Shortcut', 'New-StartTile', 'Read-ScriptParameters', 
+               'Test-PendingReboot', 'Wait-FileUnlock'
 
 # Cmdlets to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no cmdlets to export.
 CmdletsToExport = @()
