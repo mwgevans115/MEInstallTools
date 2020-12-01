@@ -61,7 +61,7 @@ Properties {
 
     # Enable/disable the concatination of your module into fewer files during the build.
     [System.Diagnostics.CodeAnalysis.SuppressMessage('PSUseDeclaredVarsMoreThanAssigments', '')]
-    $ConcatenateBuild = $false
+    $ConcatenateBuild = $true
 
     # Select the level of concatenation desired.
     # 1 - public functions are concatenated to the psm1, private functions are concatenated to a separate file.
@@ -176,7 +176,7 @@ Properties {
     # Moved from _build.psake.ps1 as no longer working under Psake version 4.9.0
     [System.Diagnostics.CodeAnalysis.SuppressMessage('PSUseDeclaredVarsMoreThanAssigments', '')]
     $ModuleOutDir = "$OutDir\$ModuleName"
-    
+
     [System.Diagnostics.CodeAnalysis.SuppressMessage('PSUseDeclaredVarsMoreThanAssigments', '')]
     $UpdatableHelpOutDir = "$OutDir\UpdatableHelp"
 }

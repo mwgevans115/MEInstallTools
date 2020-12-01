@@ -1,3 +1,4 @@
+#Requires -RunAsAdministrator
 param (
     [Parameter( Position = 4,
     HelpMessage = "Application Name (Icon)")]
@@ -12,25 +13,29 @@ param (
     $DBServerInstance = 'localhost'
 )
 Remove-Module MEInstallTools -Force -ErrorAction SilentlyContinue
-Import-Module .\src\MEInstallTools.psd1
-#Get-DownloadFolder
-#Read-ScriptParameters $MyInvocation.MyCommand.Parameters $PSBoundParameters
-# $x = New-Shortcut -TargetPath 'C:\MNP\Software\ICE.exe' -ShortcutFolder 'Test'
-# New-StartTile -Shortcut $x -Group 'Fred' -Verbose
-# Get-Installer 'https://aka.ms/vs/16/release/vc_redist.x64.exe' -Verbose
-#$x = [uri]'https://madspaniels.sharepoint.com/TeamSite/'
-#Get-SharepointFolder -SiteURI $x -DocumentFolder 'Documents'
+$Module = (Get-ChildItem -Path .\* -Recurse -Include 'MEInstallTools.psd1' | Select -First 1).FullName
+Import-Module $Module
 
-if (!(Test-Administrator)) {
-    #exit
+# Get User Input for Parameters not explicitly set
+$MyInvocation.MyCommand.Parameters.Keys | where { -not $PSBoundParameters.ContainsKey($_) -and `
+        $_ -notin ([System.Management.Automation.Cmdlet]::CommonParameters) } |
+ForEach-Object {
+    $Param = $MyInvocation.MyCommand.Parameters[$_]
+    $value = $null
+    $Message = $Param.Attributes[0].HelpMessage
+    $default = (Get-Variable -Name $_).Value
+    if (!($value = Read-Host "$Message [$default]")) { $value = $default }
+    Set-Variable -Name $_ -Value $value
 }
-Read-ScriptParameters -ScriptParameters $MyInvocation.MyCommand.Parameters -BoundParameters $PSBoundParameters
-
-# Prepare software folder, backup existing or create new
-if (!(Test-Path $SoftwarePath -PathType Container)) {
-    exit
+# Print all Parameters Values if Verbose
+$MyInvocation.MyCommand.Parameters.Keys | where {
+    $_ -notin ([System.Management.Automation.Cmdlet]::CommonParameters) } |
+ForEach-Object {
+    $param = Get-Variable -Name $_
+    Write-Verbose "$($param.Name) --> $($param.Value)"
 }
 
+# Check and Install PreRequisites
 $PreReequisiteFolder = Join-Path $SoftwarePath 'PreRequisites'
 $PreReequisites = Get-ChildItem $PreReequisiteFolder
 foreach ($prereq in $PreReequisites) {

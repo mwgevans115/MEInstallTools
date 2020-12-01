@@ -7,7 +7,7 @@ function Read-ScriptParameters {
         $BoundParameters
     )
     $ScriptParams = @{}
-    $ScriptParameters.GetEnumerator() | Where-Object { $_.Key -notin ([System.Management.Automation.Cmdlet]::CommonParameters) } | ForEach-Object { $ScriptParams.Add($_.Key, $_.Value) }
+    $ScriptParameters.GetEnumerator() | Where-Object {$_.Key -notin ([System.Management.Automation.Cmdlet]::CommonParameters) } | ForEach-Object { $ScriptParams.Add($_.Key, $_.Value) }
     Write-Verbose "ScriptHas $($ScriptParams.Count)"
     if ($BoundParameters.Keys.Count -gt 0) {
         $UnsetParams = Compare-Object -ReferenceObject $($ScriptParams.Keys) -DifferenceObject $($PSBoundParameters.Keys)
@@ -19,7 +19,7 @@ function Read-ScriptParameters {
         $Param = $ScriptParams[$item.InputObject]
         $value = $null
         $Message = $Param.Attributes[0].HelpMessage
-        $default = (Get-Variable -Name $item.InputObject).Value
+        $default = (Get-Variable -Name $item.InputObject -Scope $Global).Value
         if (!($value = Read-Host "$Message [$default]")) { $value = $default }
         Set-Variable -Name $item.InputObject -Value $value -Scope Global
     }
