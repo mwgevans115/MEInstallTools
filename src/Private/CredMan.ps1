@@ -502,7 +502,11 @@ namespace PsUtils
   }
   catch {
     #only remove the error we generate
-    $Error.RemoveAt($Error.Count - 1)
+    If ($Error.Count){
+      $Error.RemoveAt($Error.Count - 1)
+    } else {
+      $Error.Clear()
+    }
   }
   if ($null -eq $PsCredMan) {
     Add-Type $PsCredmanUtils
