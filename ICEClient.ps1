@@ -16,6 +16,12 @@ Remove-Module MEInstallTools -Force -ErrorAction SilentlyContinue
 $Module = (Get-ChildItem -Path .\* -Recurse -Include 'MEInstallTools.psd1' | Select -First 1).FullName
 Import-Module $Module
 
+$Modules = @("7Zip4Powershell")
+foreach ($module in $modules) {
+    if ((Get-Module -Name $module -ListAvailable).Version -lt [version](Find-Module -Name $module).Version) { Install-Module -Name $Module -Force -AllowClobber -Scope CurrentUser }
+}
+
+
 # Get User Input for Parameters not explicitly set
 $MyInvocation.MyCommand.Parameters.Keys | where { -not $PSBoundParameters.ContainsKey($_) -and `
         $_ -notin ([System.Management.Automation.Cmdlet]::CommonParameters) } |
