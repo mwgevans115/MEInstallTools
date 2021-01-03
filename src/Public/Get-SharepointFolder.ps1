@@ -5,22 +5,22 @@ function Get-SharepointFolder {
         [uri]
         $SiteURI,
         [String]
-        $DocumentFolder = 'Shared Documents'
+        $DocumentFolder = 'Shared Documents',
+        [Switch]
+        $UseWebAuth
     )
     $URI = [uri]$SiteURI
-    #$Strings = $URI.PathAndQuery -split '/'
-    #If ($Strings.Count -gt)
-    #$Site = "$($Strings[1])/$($Strings[2])"
     $SharePointSite = "$($URI.Scheme)://$($URI.DnsSafeHost)/$($URI.PathAndQuery)"
     Write-Verbose $SharePointSite
     $Stoploop = $false
     [int]$Retrycount = "0"
-    $x = CredMan -GetCred -Target "$($URI.Scheme)://$($URI.DnsSafeHost)/"
-    if (!($x)) {Write-Output "Credentials for Sharepoint Site $($URI.Scheme)://$($URI.DnsSafeHost)/"}
-
+    If (!($UseWebAuth)){
+        $x = CredMan -GetCred -Target "$($URI.Scheme)://$($URI.DnsSafeHost)/"
+        if (!($x)) {Write-Output "Credentials for Sharepoint Site $($URI.Scheme)://$($URI.DnsSafeHost)/"}
+    }
     do {
         try {
-            Connect-PnPOnline -Url $SharePointSite
+            Connect-PnPOnline -Url $SharePointSite -UseWebLogin:$UseWebAuth
             $Stoploop = $true
         }
         catch {

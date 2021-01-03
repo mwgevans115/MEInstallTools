@@ -7,9 +7,8 @@ param (
     [Parameter(HelpMessage = "URL for sharepoint site")]
     $URL = 'https://mnpmedialtd.sharepoint.com/sites/Releases',
     [Parameter(HelpMessage = "Sharepoint location for
-    Ice")]
-    $DocumentFolder = 'Shared Documents\Latest\Ice'
-
+    OrderActive Services")]
+    $DocumentFolder = 'Shared Documents\Latest\OrderActive.Services\Unicode'
 )
 Remove-Module MEInstallTools -Force -ErrorAction SilentlyContinue
 $Module = (Get-ChildItem -Path .\src\* -Recurse -Include 'MEInstallTools.psd1' | Select -First 1).FullName
@@ -38,8 +37,6 @@ ForEach-Object {
     $param = Get-Variable -Name $_
     Write-Verbose "$($param.Name) --> $($param.Value)"
 }
-
-<#
 # Prepare software folder, backup existing or create new
 if (Test-Path $SoftwarePath -PathType Container) {
     Write-Output "Backing up $SoftwarePath"
@@ -49,7 +46,6 @@ if (Test-Path $SoftwarePath -PathType Container) {
 else {
     New-Item $SoftwarePath -ItemType Directory -Force | Out-Null
 }
-
 # Download Pre-Requisites
 Write-Output "Downloading Pre-Requisites"
 $PreReequisites = @('https://aka.ms/vs/16/release/vc_redist.x64.exe', 'https://aka.ms/vs/16/release/vc_redist.x86.exe', 'http://go.microsoft.com/fwlink/?LinkID=239648&clcid=0x409', 'https://go.microsoft.com/fwlink/?linkid=2129954') | % { Get-Installer -URI $_ }
@@ -59,11 +55,9 @@ New-Item $PreReequisiteFolder -ItemType Directory -Force | Out-Null
 $PreReequisites | ForEach-Object { Wait-FileUnlock $_.FullName }
 $PreReequisites | Copy-Item -Destination $PreReequisiteFolder -Force
 $PreReequisites | Remove-Item -Force -ErrorAction SilentlyContinue
-#>
 #Download ICE Software
 Write-Output "Downloading ICE from sharepoint"
 $Downloads = Get-SharepointFolder -SiteURI $URL -DocumentFolder $DocumentFolder -verbose -usewebauth
-<#
 $Downloads | % {
     if ($_.Name.EndsWith('.zip') -or $_.Name.Endswith('.7z') ) {
         Expand-7Zip -ArchiveFileName $_.FullName `
@@ -74,5 +68,3 @@ $Downloads | % {
         Move-Item $_.FullName -Destination $SoftwarePath -Force
     }
 }
-#>
-Remove-Module MEInstallTools -Force
