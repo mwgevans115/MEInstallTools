@@ -1,8 +1,8 @@
 ###Requires -RunAsAdministrator
 param (
-    [Parameter(HelpMessage = "Path to install ICE")]
-    $SoftwarePath = "C:\MNP\Software",
-    [Parameter(HelpMessage = "Path to backup ICE")]
+    [Parameter(HelpMessage = "Path to install Services")]
+    $SoftwarePath = "C:\MNP\Server",
+    [Parameter(HelpMessage = "Path to backup Services")]
     $SoftwareBackup = "C:\MNP\Backup",
     [Parameter(HelpMessage = "URL for sharepoint site")]
     $URL = 'https://mnpmedialtd.sharepoint.com/sites/Releases',
