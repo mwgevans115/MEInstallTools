@@ -14,6 +14,7 @@ Remove-Module MEInstallTools -Force -ErrorAction SilentlyContinue
 $Module = (Get-ChildItem -Path .\src\* -Recurse -Include 'MEInstallTools.psd1' | Select -First 1).FullName
 Import-Module $Module
 
+
 $Modules = @("SharePointPnPPowerShellOnline", "7Zip4Powershell")
 foreach ($module in $modules) {
     if ((Get-Module -Name $module -ListAvailable).Version -lt [version](Find-Module -Name $module).Version) { Install-Module -Name $Module -Force -AllowClobber -Scope CurrentUser }
@@ -56,6 +57,9 @@ $PreReequisites | ForEach-Object { Wait-FileUnlock $_.FullName }
 $PreReequisites | Copy-Item -Destination $PreReequisiteFolder -Force
 $PreReequisites | Remove-Item -Force -ErrorAction SilentlyContinue
 #Download ICE Software
+Enable-InternetExplorerESC
+Add-TrustedSite -PrimaryDomain 'sharepoint.com' -SubDomain 'mnpmedialtd-files'
+Add-TrustedSite -PrimaryDomain 'sharepoint.com' -SubDomain 'mnpmedialtd-myfiles'
 Write-Output "Downloading ICE from sharepoint"
 $Downloads = Get-SharepointFolder -SiteURI $URL -DocumentFolder $DocumentFolder -verbose -usewebauth
 $Downloads | % {
