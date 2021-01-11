@@ -5,15 +5,26 @@ online version:
 schema: 2.0.0
 ---
 
-# Get-SharepointFolder
+# Set-InternetExplorerESC
 
 ## SYNOPSIS
 {{ Fill in the Synopsis }}
 
 ## SYNTAX
 
+### Flexible
 ```
-Get-SharepointFolder [[-SiteURI] <Uri>] [[-DocumentFolder] <String>] [-UseWebAuth] [<CommonParameters>]
+Set-InternetExplorerESC [-Admin] <Object> [-User] <Object> [<CommonParameters>]
+```
+
+### Disable
+```
+Set-InternetExplorerESC [-DisableAll] [<CommonParameters>]
+```
+
+### Enable
+```
+Set-InternetExplorerESC [-EnableAll] [<CommonParameters>]
 ```
 
 ## DESCRIPTION
@@ -30,46 +41,61 @@ PS C:\> {{ Add example code here }}
 
 ## PARAMETERS
 
-### -DocumentFolder
-{{ Fill DocumentFolder Description }}
+### -Admin
+{{ Fill Admin Description }}
 
 ```yaml
-Type: String
-Parameter Sets: (All)
+Type: Object
+Parameter Sets: Flexible
 Aliases:
 
-Required: False
-Position: 1
-Default value: None
-Accept pipeline input: False
-Accept wildcard characters: False
-```
-
-### -SiteURI
-{{ Fill SiteURI Description }}
-
-```yaml
-Type: Uri
-Parameter Sets: (All)
-Aliases:
-
-Required: False
+Required: True
 Position: 0
 Default value: None
 Accept pipeline input: False
 Accept wildcard characters: False
 ```
 
-### -UseWebAuth
-{{ Fill UseWebAuth Description }}
+### -DisableAll
+{{ Fill DisableAll Description }}
 
 ```yaml
 Type: SwitchParameter
-Parameter Sets: (All)
+Parameter Sets: Disable
 Aliases:
 
-Required: False
-Position: Named
+Required: True
+Position: 0
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -EnableAll
+{{ Fill EnableAll Description }}
+
+```yaml
+Type: SwitchParameter
+Parameter Sets: Enable
+Aliases:
+
+Required: True
+Position: 0
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -User
+{{ Fill User Description }}
+
+```yaml
+Type: Object
+Parameter Sets: Flexible
+Aliases:
+
+Required: True
+Position: 1
 Default value: None
 Accept pipeline input: False
 Accept wildcard characters: False

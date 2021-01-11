@@ -103,7 +103,7 @@ function Add-TrustedSite {
             }
         }
         Catch {
-            Write-Host "Failed to add trusted sites in Internet Explorer." -BackgroundColor Red
+            Write-Verbose "Failed to add trusted sites in Internet Explorer." -BackgroundColor Red
         }
     }
 
@@ -115,12 +115,12 @@ function Add-TrustedSite {
             If ($HTTP) {
                 CreateKeyReg -KeyPath $UserRegPath -Name $TruestedSite
                 SetRegValue -RegPath "$UserRegPath\$TruestedSite" -blnHTTP $true -DWord $DWord
-                Write-Host "Successfully added '$TruestedSite' domain to trusted Sites in Internet Explorer."
+                Write-Verbose "Successfully added '$TruestedSite' domain to trusted Sites in Internet Explorer."
             }
             Else {
                 CreateKeyReg -KeyPath $UserRegPath -Name $TruestedSite
                 SetRegValue -RegPath "$UserRegPath\$TruestedSite" -blnHTTP $false -DWord $DWord
-                Write-Host "Successfully added '$TruestedSite' domain to to trusted Sites in Internet Explorer."
+                Write-Verbose "Successfully added '$TruestedSite' domain to to trusted Sites in Internet Explorer."
             }
         }
     }
@@ -130,13 +130,13 @@ function Add-TrustedSite {
             CreateKeyReg -KeyPath $UserRegPath -Name $PrimaryDomain
             CreateKeyReg -KeyPath "$UserRegPath\$PrimaryDomain" -Name $SubDomain
             SetRegValue -RegPath "$UserRegPath\$PrimaryDomain\$SubDomain" -blnHTTP $true -DWord $DWord
-            Write-Host "Successfully added $SubDomain.$PrimaryDomain' domain to trusted Sites in Internet Explorer."
+            Write-Verbose "Successfully added $SubDomain.$PrimaryDomain' domain to trusted Sites in Internet Explorer."
         }
         Else {
             CreateKeyReg -KeyPath $UserRegPath -Name $PrimaryDomain
             CreateKeyReg -KeyPath "$UserRegPath\$PrimaryDomain" -Name $SubDomain
             SetRegValue -RegPath "$UserRegPath\$PrimaryDomain\$SubDomain" -blnHTTP $false -DWord $DWord
-            Write-Host "Successfully added '$SubDomain.$PrimaryDomain' domain to trusted Sites in Internet Explorer."
+            Write-Verbose "Successfully added '$SubDomain.$PrimaryDomain' domain to trusted Sites in Internet Explorer."
         }
     }
 }
