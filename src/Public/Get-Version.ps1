@@ -1,8 +1,8 @@
 function Get-Version {
     param (
-        [Parameter(Position = 0, Mandatory = $true, ParameterSetName = "FileItem")]
+        [Parameter(Position = 0, Mandatory = $true, ParameterSetName = "FileItem", ValueFromPipeline = $true)]
         [IO.FileInfo] $File,
-        [Parameter(Position = 0, Mandatory = $true, ParameterSetName = "FileName")]
+        [Parameter(Position = 0, Mandatory = $true, ParameterSetName = "FileName", ValueFromPipeline = $true)]
         [string] $FilleName
     )
     if ($PSCmdlet.ParameterSetName -eq "FileName") {
