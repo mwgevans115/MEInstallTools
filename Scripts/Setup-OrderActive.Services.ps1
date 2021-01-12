@@ -70,7 +70,12 @@ foreach ($item in $CheckObjects) {
 }
 
 # Software PreRequisites
-$SoftwarePreRequisites = Get-ChildItem C:\MNP\Server\PreRequisites | Get-Version
+# Check and Install PreRequisites
+$PreReequisiteFolder = 'C:\MNP\Server\PreRequisites'    #Join-Path $SoftwarePath 'PreRequisites'
+$PreReequisites = Get-ChildItem $PreReequisiteFolder
+foreach ($prereq in $PreReequisites) {
+    Install-Software $prereq -Verbose
+}
 
 # Create MNP ServiceCfg Initial data
 # ODBC Drivers
