@@ -5,14 +5,17 @@ function Get-Version {
         [Parameter(Position = 0, Mandatory = $true, ParameterSetName = "FileName", ValueFromPipeline = $true)]
         [string] $FilleName
     )
-    if ($PSCmdlet.ParameterSetName -eq "FileName") {
-        $File = Get-ChildItem $FilleName
+    process {
+        if ($PSCmdlet.ParameterSetName -eq "FileName") {
+            $File = Get-ChildItem $FilleName
+        }
+        If ($File.Extension -eq '.msi') {
+            Return Get-MSIVersion -MSI $File
+        }
+        else {
+            Return @{Version = $File.VersionInfo.ProductVersion; ProductName = $File.VersionInfo.ProductName }
+        }
     }
-    If ($File.Extension -eq '.msi') {
-        Return Get-MSIVersion -MSI $File
-    }
-    else {
-        Return @{Version = $File.VersionInfo.ProductVersion; ProductName = $File.VersionInfo.ProductName }
-    }
+
 
 }
