@@ -25,7 +25,7 @@
   Author:         <Name>
   Creation Date:  <Date>
   Purpose/Change: Initial script development
-  
+
 .EXAMPLE
   <Example goes here. Repeat this attribute for more than one example>
 #>
@@ -47,7 +47,7 @@ function Set-Logging {
         [Parameter()]
         [ValidateSet('DEBUG', 'INFO', 'WARNING', 'ERROR')]
         [String]$FileLevel = 'DEBUG'
-    
+
     )
     #Configure Logging
     $LogPath = '.\Logs'
@@ -62,9 +62,9 @@ function Set-Logging {
         Encoding  = 'ascii'           # <Not required> Sets the log file encoding
         Level     = $FileLevel          # <Not required> Sets the logging level for this target
         #Format      = <NOTSET>          # <Not required> Sets the logging format for this target
-    }   
-        
-        
+    }
+
+
 }
 
 function New-Password {
@@ -78,9 +78,9 @@ function New-Password {
         Write-Log -Level ERROR -Message 'Unable to load module to create new password'
     }
     do {
-        $Password = [System.Web.Security.Membership]::GeneratePassword($Length, 3)  
+        $Password = [System.Web.Security.Membership]::GeneratePassword($Length, 3)
     } until (!($Password.Contains(';') -or ($Password.Contains("'"))))
-    
+
     Return ConvertTo-SecureString -String "$Password" -AsPlainText -Force
 }
 function Get-SQLLoginCredentials {
@@ -121,7 +121,7 @@ function Get-SQLLoginCredentials {
                 else {
                     $Result = Get-Credential -Message "Enter SQL Login Password for $LoginName on $SQLInstance"`
                         -UserName "$LoginName"
-                }       
+                }
                 Write-Log -Level DEBUG -Message 'Saving Secure Credential File {0}.{1}.xml'`
                     -Arguments @($SQLInstance, $LoginName)
                 Export-Clixml -InputObject $Result -Path $CredentialFile -Force
@@ -211,16 +211,16 @@ function Test-Database {
     BEGIN
         IF NOT EXISTS(
         Select *
-            From $DBName.sys.server_principals SP 
+            From $DBName.sys.server_principals SP
             JOIN $DBName.sys.database_principals DP ON DP.sid = SP.sid
-            LEFT OUTER JOIN $DBName.sys.sysmembers Members ON dp.principal_id = Members.memberuid 
-            where sp.name='$DBUser' and USER_NAME([groupuid])='$DBRole') 
+            LEFT OUTER JOIN $DBName.sys.sysmembers Members ON dp.principal_id = Members.memberuid
+            where sp.name='$DBUser' and USER_NAME([groupuid])='$DBRole')
         BEGIN
             declare @sql varchar(200)
             IF NOT EXISTS(
                 Select *
-                From $DBName.sys.server_principals SP 
-                JOIN $DBName.sys.database_principals DP ON DP.sid = SP.sid 
+                From $DBName.sys.server_principals SP
+                JOIN $DBName.sys.database_principals DP ON DP.sid = SP.sid
                 where sp.name='$DBUser')
             BEGIN
                 select @sql = 'USE $DBName;	CREATE USER $DBUser FOR LOGIN $DBUser WITH DEFAULT_SCHEMA=[dbo]; EXEC sp_addrolemember N''$DBrole'', N''$DBUser'' '
@@ -232,7 +232,7 @@ function Test-Database {
                 select @sql = 'USE $DBName;	EXEC sp_addrolemember N''$DBRole'', N''$DBUser'' '
                 EXEC sp_sqlexec @Sql
                 PRINT 'OrderActive Added to Role'
-            END	
+            END
         END
         SELECT CAST(1 AS BIT)
     END
@@ -248,17 +248,17 @@ function Test-Database {
         $Result = $false
     }
     Return $Result
-    
+
 }
 
-Function Test-ODBCConnection { 
-    [CmdletBinding()] 
-    param( 
-        [Parameter(Mandatory = $True, 
-            HelpMessage = "DSN name of ODBC connection")] 
+Function Test-ODBCConnection {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $True,
+            HelpMessage = "DSN name of ODBC connection")]
         [string]$DSN,
-        $Connection 
-    ) 
+        $Connection
+    )
     $conn = new-object system.data.odbc.odbcconnection
     If ($Connection) {
         $PlainCredential = Get-PlainCredential -Connection $Connection
@@ -274,22 +274,22 @@ Function Test-ODBCConnection {
         Write-Log -Level DEBUG -Message "Testing ODBC without credentials"
         $conn.connectionstring = "DSN=$DSN"
     }
-    
-    try { 
+
+    try {
         $conn.Open()
-        if (($conn.State) -eq 'Open') { 
-            $conn.Close() 
-            $true 
-        } 
-        else { 
-            $false 
-        } 
+        if (($conn.State) -eq 'Open') {
+            $conn.Close()
+            $true
+        }
+        else {
+            $false
+        }
     }
     catch {
-        Write-Log -Level ERROR "Function Test-ODBCConnection Error" 
+        Write-Log -Level ERROR "Function Test-ODBCConnection Error"
         Write-Log -Level ERROR -Message $_.Exception.Message
-        $false 
-    } 
+        $false
+    }
 }
 function ConvertTo-PlainText {
     param (
@@ -298,28 +298,28 @@ function ConvertTo-PlainText {
     $bstr = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($EncryptedString)
     Return [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($bstr)
 
-    
+
 }
 function Get-SharepointFolder {
     param (
         [String]
         $SiteURL,
         [String]
-        $SiteFolder, 
+        $SiteFolder,
         [System.Management.Automation.PSCredential]
-        $SiteCred, 
+        $SiteCred,
         [String]
         $LocalFolder
     )
     New-Item -Path $LocalFolder -ItemType Directory -Force | Out-Null
     try {
-        #Connecting to SharePoint site  
+        #Connecting to SharePoint site
         Connect-PnPOnline -Url $SiteURL -Credentials $SiteCred
         #Get List of Files in Folder
         $Files = Get-PnPFolderItem -FolderSiteRelativeUrl $SiteFolder -ItemType File
         Write-Log -Level DEBUG -Message "Downloading {0} Files" -Arguments ($Files).Count
         $ResultList = @()
-        foreach ($File in $Files) {  
+        foreach ($File in $Files) {
             Get-PnPFile -Url $File.ServerRelativeUrl -Path $LocalFolder -FileName $File.Name -AsFile  -Force
             Write-Log -Level DEBUG -Message "Downloaded {0}" -Arguments $File.Name
             $ResultList = $ResultList += $(Join-Path -Path $LocalFolder -ChildPath $File.Name)
@@ -331,7 +331,7 @@ function Get-SharepointFolder {
     }
     Return $ResultList
 }
-function New-SQLConnectionParams { 
+function New-SQLConnectionParams {
     param (
         $ServerInstance = 'localhost',
         [PSCredential]$PSCredentials
@@ -378,7 +378,7 @@ function Invoke-RetryCommand {
                 return
             }
             catch {
-                Write-Log -Level Error -Message $_.Exception.InnerException.Message 
+                Write-Log -Level Error -Message $_.Exception.InnerException.Message
                 # Write-Error $_.Exception.InnerException.Message -ErrorAction Continue
                 Start-Sleep -Milliseconds $Delay
                 $RecoveryBlock.Invoke()
@@ -386,7 +386,7 @@ function Invoke-RetryCommand {
                     Write-Log -Level WARNING -Message 'Retry {0} of {1}'`
                         -Arguments @(($cnt + 1), $Maximum )
                 }
-                
+
             }
         } while ($cnt -lt $Maximum)
 
@@ -411,7 +411,7 @@ function Set-ODBCConnection {
     $HashArguments = @{
         Name             = "$DBName"
         DriverName       = "SQL Server Native Client 11.0"
-        SetPropertyValue = @("Server=$($Connection.ServerInstance)", 
+        SetPropertyValue = @("Server=$($Connection.ServerInstance)",
             "Trusted_Connection=No",
             "Database=$DBName")
         #Platform         = '32-bit'
@@ -425,10 +425,10 @@ function Set-ODBCConnection {
     }
     IF (!(Test-ODBCConnection -DSN $DBName -Connection $Connection)) {
         if (Get-OdbcDsn -Name $DBName -ea SilentlyContinue) {
-            Get-OdbcDsn -Name $DBName | ForEach-Object { 
+            Get-OdbcDsn -Name $DBName | ForEach-Object {
                 Write-Log -Level WARNING -Message "Removing ODBCDsn Name {0}: Type:{1} Platform {2}" -Arguments @($_.Name, $_.DSNType, $_.Platform)
                 Remove-OdbcDsn -InputObject $_
-            } 
+            }
         }
         Write-Log -Level DEBUG -Message "Adding ODBCDsn Name {0}: Type:{1} Platform {2}" -Arguments @($HashArguments['Name'], $HashArguments['DSNType'], $HashArguments['Platform'])
         Add-OdbcDsn @HashArguments -Platform '32-bit'
@@ -445,14 +445,14 @@ function Set-ODBCConnection {
     }
     else {
         Write-Log -Level INFO -Message "ODBCDsn {0} Tested Succesfully" -Arguments  @($DBName)
-    }    
+    }
 }
 function Test-IsAdmin {
 
     ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")
-    
+
 }
-    
+
 #---------------------------------------------------------[Initialisations]--------------------------------------------------------
 
 #Set Error Action to Silently Continue
@@ -495,7 +495,7 @@ foreach ($key in $Folders.Keys) {
     if ([string]::IsNullOrWhiteSpace($Folders[$key]['Parent'])) {
         $Folders[$key]['FullName'] = $Result
     }
-    else {  
+    else {
         $Folders[$key]['FullName'] = Join-Path -Path $Folders[$Folders[$key]['Parent']]['FullName'] -ChildPath $Result
     }
     New-Item -Path $Folders[$key]['FullName'] -Force -ItemType Directory | Out-Null
@@ -504,7 +504,7 @@ foreach ($key in $Folders.Keys) {
 function Get-Input ($Default, $Prompt) {
     $Result = Read-Host -Prompt "$Prompt [$Default]"
     if (([string]::IsNullOrWhiteSpace($Result))) {
-        $Result = $Default 
+        $Result = $Default
     }
     Return $Result
 }
@@ -512,7 +512,7 @@ function Get-Input ($Default, $Prompt) {
 
 $Result = Read-Host -Prompt "Enter Admin Account (Blank for Windows Auth) []"
 if (!([string]::IsNullOrWhiteSpace($Result))) {
-    $AdminCred = Get-Credential -UserName $Result -Message "Please Enter Password for user $Result" 
+    $AdminCred = Get-Credential -UserName $Result -Message "Please Enter Password for user $Result"
 }
 
 $AppSQLLogin = Get-Input -Default 'OrderActive' -Prompt 'Please Enter Application User'
@@ -540,8 +540,8 @@ catch {
 
 #MNP Software Release Site
 $MNPReleasesURL = Get-Input -Default 'https://mnpmedialtd.sharepoint.com/sites/Releases' -Prompt "MNP Releases Site"
-#MNP SOftware Folder  
-$SharePointFolderPath = Get-Input -Default "Shared Documents/Latest/OrderActive.Services/Unicode" -Prompt "Software Folder"    
+#MNP SOftware Folder
+$SharePointFolderPath = Get-Input -Default "Shared Documents/Latest/OrderActive.Services/Unicode" -Prompt "Software Folder"
 
 
 
@@ -592,7 +592,7 @@ foreach ($Database in $RequiredDatabases) {
     }
     Else {
         Write-Log -Level DEBUG -Message 'Database {0} exists with correct permissions'`
-            -Arguments $Database 
+            -Arguments $Database
     }
 }
 If ($Continue -eq $false) {
@@ -605,11 +605,12 @@ else {
 #Check SQL Objects
 $Continue = $true
 $DBObjectQuery = @"
-select 
+select
  [database name] = DB_NAME()
 ,[schema name] =  SCHEMA_NAME([schema_id])
 ,name
 ,type [Object type]
+,type_desc [Object type]
 ,create_date [create date]
 ,modify_date [last modify date]
 ,ROUTINE_DEFINITION
@@ -632,7 +633,7 @@ foreach ($item in $CheckObjects) {
         else {
             Write-Log -Level ERROR -Message 'Database Object Not Found : {0}' -Arguments $object
             $Continue = $false
-        }   
+        }
     }
 }
 If ($Continue -eq $false) {
@@ -694,21 +695,21 @@ $RequiredODBC = @(@{
         Connection = $AppConnection
     })
 foreach ($ODBC in $RequiredODBC) {
-    Set-ODBCConnection -DBName $ODBC.DBName -Connection $ODBC.Connection        
+    Set-ODBCConnection -DBName $ODBC.DBName -Connection $ODBC.Connection
 }
 # Check Software PreRequisites
 $client11 = $false
 $checkClient = Get-ChildItem 'HKLM:\Software\Microsoft\*' -ea SilentlyContinue | Where-Object { $_.name -like '*Client*' }
-if ($checkClient.name.Split('\') -eq 'Microsoft SQL Server Native Client 11.0') {   
-    Write-Log -Level INFO -Message 'SQL Native Client 11.0 has been already installed'   
-    $client11 = $True   
+if ($checkClient.name.Split('\') -eq 'Microsoft SQL Server Native Client 11.0') {
+    Write-Log -Level INFO -Message 'SQL Native Client 11.0 has been already installed'
+    $client11 = $True
 }
-else {      
+else {
     Write--Log -Level WARNING -Message 'SQL Native Client 11.0 not installed'
-    $client11 = $false    
+    $client11 = $false
 }
-if ($client11 -eq $false) { 
-    try {   
+if ($client11 -eq $false) {
+    try {
         Write-Log -Level INFO -Message 'Installing Native Client 11'
         Set-Location C:\WorkingFiles
         invoke-webrequest -UseBasicParsing -Uri $ClientURI -OutFile 'sqlncli.msi'
@@ -747,7 +748,7 @@ if (Test-Path $AppFolder ) {
     Write-Log -Level INFO -Message 'Backing up {0} to {1}'`
         -Arguments @($AppFolder, $BackupPath)
     New-Item $BackupPath -ItemType Directory -Force | Out-Null
-    Move-Item -Path $AppFolder -Destination $BackupPath    
+    Move-Item -Path $AppFolder -Destination $BackupPath
 }
 Write-Log -Level INFO -Message 'Moving {0} to {1}'`
     -Arguments @($SoftwareFolder.Name, $Folders['AppSoftware']['FullName'])
@@ -766,10 +767,10 @@ foreach ($app in $ServiceApplications) {
     If (Test-Path $AppPath) {
         Write-Log -Level INFO -Message 'Starting {0} for installation' -Arguments $app
         $AppProcess = Start-Process $AppPath -PassThru
-    
+
         #Wait for App Process to complete
         while (!($AppProcess.HasExited)) {
-    
+
         }
         $Service = Get-CimInstance -ClassName win32_service | Where-Object { $_.PathName -like """$AppPath*" } #| Select Name, DisplayName, State, PathName
         if ($Service) {

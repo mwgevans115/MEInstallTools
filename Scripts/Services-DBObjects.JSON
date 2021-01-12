@@ -1,0 +1,61 @@
+[
+    {
+        "RequiredObjects":  [
+                                "DistributeHeader",
+                                "DistributeInstance",
+                                "MessagingHeader",
+                                "UserCfg",
+                                "WebRelayHeader",
+                                "WebRelayInstance",
+                                "ConsoleHeader",
+                                "usp_AddEditConsoleHeader",
+                                "usp_AddEditDistributeHeader",
+                                "usp_AddEditDistributeInstance",
+                                "usp_AddEditMessagingHeader",
+                                "usp_AddEditUserCfg",
+                                "usp_AddEditWebRelayHeader",
+                                "usp_AddEditWebRelayInstance",
+                                "usp_DeleteDistributeInstances",
+                                "usp_DeleteWebRelayInstances",
+                                "usp_GetActiveDistributeInstances",
+                                "usp_GetActiveWebRelayInstances",
+                                "usp_GetAllDistributeInstances",
+                                "usp_GetAllWebRelayInstances",
+                                "usp_GetConsoleHeader",
+                                "usp_GetDistributeHeader",
+                                "usp_GetDistributeInstance",
+                                "usp_GetMessagingHeader",
+                                "usp_GetProcessDistributeParams",
+                                "usp_GetProcessWebRelayParams",
+                                "usp_GetUserCfg",
+                                "usp_GetUserDistributeParams",
+                                "usp_GetUserWebRelayParams",
+                                "usp_GetWebRelayHeader",
+                                "usp_GetWebRelayInstance",
+                                "usp_TestConsoleUser"
+                            ],
+        "Database":  "MNPServiceCfg"
+    },
+    {
+        "RequiredObjects":  [
+                                "usp_CheckForOpenConsignment",
+                                "usp_CheckMessageHeader",
+                                "usp_CreateInvoice",
+                                "usp_GetOMSConnectXML",
+                                "usp_InsertOrderItemHeader",
+                                "usp_InsertPBLHeader",
+                                "usp_InsertPOHeader",
+                                "usp_SetEFTHeaderItemState",
+                                "usp_SetEFTHeaderState",
+                                "usp_AddUpdateCustomerContacts",
+                                "usp_InsertEftTxnLog",
+                                "usp_AddEditOrderHeader",
+                                "usp_AddUpdateInvoiceHeader",
+                                "usp_CreateCustomerNote",
+                                "usp_InsertOrderItemMessage",
+                                "usp_ReinstateConsignmentNumber",
+                                "EftTxnLog"
+                            ],
+        "Database":  "OrderActive"
+    }
+]
