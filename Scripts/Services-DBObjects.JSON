@@ -54,7 +54,8 @@
                                 "usp_CreateCustomerNote",
                                 "usp_InsertOrderItemMessage",
                                 "usp_ReinstateConsignmentNumber",
-                                "EftTxnLog"
+                                "EftTxnLog",
+                                "Test"
                             ],
         "Database":  "OrderActive"
     }

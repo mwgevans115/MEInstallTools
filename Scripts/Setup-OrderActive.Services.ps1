@@ -53,13 +53,13 @@ foreach ($item in $CheckObjects) {
     Write-Log -Level INFO -Message 'Checking {0} for {1} objects' -Arguments @($item.Database, $item.RequiredObjects.count)
     $length = $item.RequiredObjects | Sort-Object Length | Select -last 1 -ExpandProperty Length
     $objects = Get-ObjectsFromDatabase @SQLParams -Database $item.Database -OutputAs DataTables
-    $objects.PrimaryKey = $objects.Columns['Schema name'],$objects.Columns['Name']
+    $objects.PrimaryKey = $objects.Columns['Schema name'], $objects.Columns['Name']
     $dvObject = New-Object System.Data.DataView($objects)
     foreach ($objectName in $item.RequiredObjects) {
         $dvObject.RowFilter = "name = '$objectName'"
         #$object = $objects.Rows.Find('Name',$objectName) | Select -first 1
         if ($dvObject.Count -gt 0) {
-            Write-Log -Level DEBUG -Message "`tFound Object: {0}`t{1}" -Arguments $objectName.PadRight($length,' '), $dvObject[0].'last modify date'
+            Write-Log -Level DEBUG -Message "`tFound Object: {0}`t{1}" -Arguments $objectName.PadRight($length, ' '), $dvObject[0].'last modify date'
         }
         else {
             Write-Log -Level ERROR -Message "`tRequired Object {0}.{1} Not Found" -Arguments $item.Database, $objectName
@@ -77,8 +77,36 @@ foreach ($prereq in $PreReequisites) {
     Install-Software $prereq -Verbose
 }
 
-# Create MNP ServiceCfg Initial data
 # ODBC Drivers
+$DriverName = (Get-OdbcDriver -Name "SQL Server Native Client 1*" | Select-Object -First 1).Name
+$ODBCConnections = @(
+    @{
+        name             = 'OrderActive'
+        DsnType          = 'System'
+        DriverName       = $DriverName
+        SetPropertyValue = @("Server=$ServerInstance", "Trusted_Connection=No", "Database=OrderActive")
+    },
+    @{
+        name             = 'MNPServiceCfg'
+        DsnType          = 'System'
+        DriverName       = $DriverName
+        SetPropertyValue = @("Server=$ServerInstance", "Trusted_Connection=No", "Database=MNPServiceCfg")
+    }
+)
+foreach ($connection in $ODBCConnections) {
+    foreach ($platform in '32-bit', '64-bit') {
+        If (Get-OdbcDsn -Name $connection.name -Platform $platform -ErrorAction SilentlyContinue) {
+            Write-Log -Level WARNING 'Removing {0} ODBC DSN {1}' -Arguments $platform, $connection.Name
+            Get-OdbcDsn -Name $connection.name -Platform $platform | Remove-OdbcDsn
+        }
+        Write-Log -Level INFO 'Adding {0} ODBC DSN {1}' -Arguments $platform, $connection.Name
+        Add-OdbcDsn @connection -Platform $platform
+    }
+}
+
+# Create MNP ServiceCfg Initial data
+
+
 # Run Service Applications
 
 Wait-Logging
