@@ -19,18 +19,16 @@ param (
 $PSCmdlet.ParameterSetName
 If ($PSCmdlet.ParameterSetName -eq 'USER+PASSWORD'){
     if (!($OrderActiveSecurePassword)){
-        Out-Host "Enter Password for $OrderActiveUserName (Leave Blank to generate)"
+        Write-Output "Enter Password for $OrderActiveUserName (Leave Blank to generate)"
         $OrderActiveSecurePassword = Read-Host -AsSecureString
-        If(!($OrderActiveSecurePassword)){
+        If($OrderActiveSecurePassword.Length -eq 0){
             Write-Log -Level WARNING -Message 'Generating Password for SQL Login "{0}"' -Arguments $OrderActiveUser
             $OrderActiveSecurePassword = Get-NewPassword
         }
     }
     $OrderActiveUserCredential = New-Object System.Management.Automation.PSCredential ($OrderActiveUsername, $OrderActiveSecurePassword)
 }
-if (!($OrderActiveUserCredential) -or !($OrderActiveUserCredential.UserName)){
 
-}
 $InitMNPServiceCfgScript = Join-Path $ServiceSoftwarePath SQLScripts\MNPServiceCfg_InitialData_Insert.sql
 $InitMNPServiceCfgScript = 'C:\Users\MarkEvans\Repos\GitHub\PowerShellScripts\Raider-Scripts\MNPServiceCfg_InitialData_Insert.sql'
 
