@@ -1,4 +1,5 @@
-[CmdletBinding()]
+[Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingConvertToSecureStringWithPlainText', '')]
+[CmdletBinding(DefaultParameterSetName = 'USER+PASSWORD')]
 param (
     [Parameter()]
     [String]
@@ -6,10 +7,30 @@ param (
     $ServiceSoftwarePath = "C:\MNP\Server",
     $ServiceLogPath = "C:\MNP\Logs",
     $OrderFilesPath = "C:\MNP\OrderFiles",
-    $OrderActiveUser = "OrderActive",
-    [SecureString]$OrderActiveUserPassword
+    [Parameter(ParameterSetName = 'PSCREDENTIAL',Mandatory=$true)]
+    [PSCredential]
+    $OrderActiveUserCredential,
+    [Parameter(ParameterSetName = 'USER+PASSWORD')]
+    [String]
+    $OrderActiveUsername = 'OrderActive',
+    [Parameter(ParameterSetName = 'USER+PASSWORD')]
+    [SecureString]$OrderActiveSecurePassword
 )
+$PSCmdlet.ParameterSetName
+If ($PSCmdlet.ParameterSetName -eq 'USER+PASSWORD'){
+    if (!($OrderActiveSecurePassword)){
+        Out-Host "Enter Password for $OrderActiveUserName (Leave Blank to generate)"
+        $OrderActiveSecurePassword = Read-Host -AsSecureString
+        If(!($OrderActiveSecurePassword)){
+            Write-Log -Level WARNING -Message 'Generating Password for SQL Login "{0}"' -Arguments $OrderActiveUser
+            $OrderActiveSecurePassword = Get-NewPassword
+        }
+    }
+    $OrderActiveUserCredential = New-Object System.Management.Automation.PSCredential ($OrderActiveUsername, $OrderActiveSecurePassword)
+}
+if (!($OrderActiveUserCredential) -or !($OrderActiveUserCredential.UserName)){
 
+}
 $InitMNPServiceCfgScript = Join-Path $ServiceSoftwarePath SQLScripts\MNPServiceCfg_InitialData_Insert.sql
 $InitMNPServiceCfgScript = 'C:\Users\MarkEvans\Repos\GitHub\PowerShellScripts\Raider-Scripts\MNPServiceCfg_InitialData_Insert.sql'
 
@@ -245,6 +266,8 @@ if (Get-DBLogin -Login $OrderActiveUser) {
         }
     }
 
+} else {
+    SQLSERVER\Add-SqlLogin @SQLParams -LoginName $OrderActiveUser -LoginType "SqlLogin" -DefaultDatabase "OtherDatabase"
 }
 
 
