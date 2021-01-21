@@ -7,7 +7,7 @@ param (
     $ServiceSoftwarePath = "C:\MNP\Server",
     $ServiceLogPath = "C:\MNP\Logs",
     $OrderFilesPath = "C:\MNP\OrderFiles",
-    [Parameter(ParameterSetName = 'PSCREDENTIAL',Mandatory=$true)]
+    [Parameter(ParameterSetName = 'PSCREDENTIAL', Mandatory = $true)]
     [PSCredential]
     $OrderActiveUserCredential,
     [Parameter(ParameterSetName = 'USER+PASSWORD')]
@@ -16,18 +16,39 @@ param (
     [Parameter(ParameterSetName = 'USER+PASSWORD')]
     [SecureString]$OrderActiveSecurePassword
 )
-$PSCmdlet.ParameterSetName
-If ($PSCmdlet.ParameterSetName -eq 'USER+PASSWORD'){
-    if (!($OrderActiveSecurePassword)){
-        Write-Output "Enter Password for $OrderActiveUserName (Leave Blank to generate)"
-        $OrderActiveSecurePassword = Read-Host -AsSecureString
-        If($OrderActiveSecurePassword.Length -eq 0){
-            Write-Log -Level WARNING -Message 'Generating Password for SQL Login "{0}"' -Arguments $OrderActiveUser
-            $OrderActiveSecurePassword = Get-NewPassword
+Add-LoggingTarget -Name Console -Configuration @{Level = 'INFO'; Format = '[%{timestamp:+%T} %{level:-7}] %{message}' }
+#region orderactivecredentials
+If ($PSCmdlet.ParameterSetName -eq 'USER+PASSWORD') {
+    if (!($OrderActiveSecurePassword)) {
+        $CredentialManagerCredential = Get-CredentialManagerCredential -Target 'MNP' -User $OrderActiveUserName
+        if ($CredentialManagerCredential.User) {
+            Write-Log -Level INFO -Message 'Using Stored Credential'
+            Write-Log -Level DEBUG -Message "`tTarget : {0}" -Arguments $CredentialManagerCredential.Target
+            Write-Log -Level DEBUG -Message "`tUser   : {0}" -Arguments $CredentialManagerCredential.User
+            Write-Log -Level DEBUG -Message "`tComment: {0}" -Arguments $CredentialManagerCredential.Comment
+            $OrderActiveSecurePassword = $CredentialManagerCredential.SecurePass
+        }
+        else {
+            Write-Output "Enter Password for $OrderActiveUserName (Leave Blank to generate)"
+            $OrderActiveSecurePassword = Read-Host -AsSecureString
+            If ($OrderActiveSecurePassword.Length -eq 0) {
+                Write-Log -Level WARNING -Message 'Generating Password for SQL Login "{0}"' -Arguments $OrderActiveUser
+                $OrderActiveSecurePassword = Get-NewPassword
+            }
+            else {
+                Write-Log -Level INFO -Message 'Using Input Password for SQL Login "{0}"' -Arguments $OrderActiveUser
+            }
         }
     }
     $OrderActiveUserCredential = New-Object System.Management.Automation.PSCredential ($OrderActiveUsername, $OrderActiveSecurePassword)
 }
+Write-Log -Level WARNING -Message "Saving Credentials for {0} to Credential Manager"
+$CredentialManagerCredential = Set-CredentialManagerCredential -Target 'MNP' -UserCredential $OrderActiveUserCredential -Comment "Set by install script $(Get-Date)"
+Write-Log -Level DEBUG -Message "`tTarget : {0}" -Arguments $CredentialManagerCredential.Target
+Write-Log -Level DEBUG -Message "`tUser   : {0}" -Arguments $CredentialManagerCredential.User
+Write-Log -Level DEBUG -Message "`tComment: {0}" -Arguments $CredentialManagerCredential.Comment
+
+#endregion orderactivecredentials
 
 $InitMNPServiceCfgScript = Join-Path $ServiceSoftwarePath SQLScripts\MNPServiceCfg_InitialData_Insert.sql
 $InitMNPServiceCfgScript = 'C:\Users\MarkEvans\Repos\GitHub\PowerShellScripts\Raider-Scripts\MNPServiceCfg_InitialData_Insert.sql'
@@ -35,7 +56,6 @@ $InitMNPServiceCfgScript = 'C:\Users\MarkEvans\Repos\GitHub\PowerShellScripts\Ra
 $SQLParams = @{
     ServerInstance = $ServerInstance
 }
-Add-LoggingTarget -Name Console -Configuration @{Level = 'INFO'; Format = '[%{timestamp:+%T} %{level:-7}] %{message}' }
 Write-Log -Level INFO 'Connecting to SQL Server {0}' -Arguments $ServerInstance
 $Query = 'Select @@VERSION as [Version], @@SERVERNAME As [ServerName], SUSER_NAME() as [Login], DB_NAME() as [Database], USER_NAME() as [User]'
 $SQLResult = SQLSERVER\Invoke-Sqlcmd @SQLParams -Query  $Query
@@ -264,8 +284,13 @@ if (Get-DBLogin -Login $OrderActiveUser) {
         }
     }
 
-} else {
-    SQLSERVER\Add-SqlLogin @SQLParams -LoginName $OrderActiveUser -LoginType "SqlLogin" -DefaultDatabase "OtherDatabase"
+}
+else {
+    SQLSERVER\Add-SqlLogin @SQLParams -LoginType "SqlLogin" -DefaultDatabase "OrderActive" `
+        -LoginPSCredential $OrderActiveUserCredential `
+        -EnforcePasswordPolicy:$false `
+        -Enable
+    SQLSERVER\Add-RoleMember -MemberName $OrderActiveUserCredential.UserName -Database "OrderActive" -RoleName "db_owner"
 }
 
 
