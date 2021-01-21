@@ -5,9 +5,9 @@ function ConvertFrom-Credman {
         $CredText
     )
     New-Object PSObject -Property @{
-        Target       = ($CredText.Split("`n") -Match 'Target').Split(':')[1].Trim()
-        User         = ($CredText.Split("`n") -Match 'UserName').Split(':')[1].Trim()
-        Comment      = ($CredText.Split("`n") -Match 'Comment').Split(':')[1].Trim()
-        SecurePass   = ConvertTo-SecureString ($CredText.Split("`n") -Match 'Password').Split(':')[1].Trim() -AsPlainText -Force
+        Target       = $(try {($CredText.Split("`n") -Match 'Target').Split(':')[1].Trim()}catch{''})
+        User         = $(try {($CredText.Split("`n") -Match 'UserName').Split(':')[1].Trim()}catch{''})
+        Comment      = $(try {($CredText.Split("`n") -Match 'Comment').Split(':')[1].Trim()}catch{''})
+        SecurePass   = $(try {ConvertTo-SecureString ($CredText.Split("`n") -Match 'Password').Split(':')[1].Trim() -AsPlainText -Force }catch{$null})
     }
 }
