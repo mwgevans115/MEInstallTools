@@ -6,8 +6,10 @@ param (
     [Parameter(HelpMessage = "Path to backup files")]
     [String]
     $SQLBackupPath = 'C:\WorkingFiles\v5_Databases\',
-    [Parameter(HelpMessage = "Path to SQLData")]
-    $SQLDataPath = 'C:\SQLDATA\',
+    [Parameter(HelpMessage = "Path to SQLData (Leave Empty for Server Default)")]
+    $SQLDataPath,
+    [Parameter(HelpMessage = "Path to SQLLogs (Leave Empty for Server Default)")]
+    $SQLLogPath,
     [Parameter(HelpMessage = "Path to install logs")]
     $InstallLogsPath = 'C:\MNP\InstallLogs'
 )
@@ -55,6 +57,7 @@ DECLARE @BACKUPFILENAME VARCHAR(MAX) = ''
 DECLARE @MDFLOGICALNAME NVARCHAR(100)
 DECLARE @LDFLOGICALNAME NVARCHAR(100)
 DECLARE @DEST_PATH NVARCHAR(100)
+DECLARE @DEST_LOGPATH NVARCHAR(100)
 DECLARE @SQL NVARCHAR(MAX)
 DECLARE @DATABASENAME SYSNAME
 DECLARE @RESULTS TABLE (
@@ -115,7 +118,8 @@ BEGIN
 
 	SET @BACKUPFILENAME = (SELECT TOP 1 FILENAME FROM #TRAILUPGRADEBACKUPFILES ORDER BY FILENAME ASC)
 	--Restore Path needs to be provided in the below
-	SET @DEST_PATH = '`$(DataPath)'
+    SET @DEST_PATH = '`$(DataPath)'
+    SET @DEST_LOGPATH = '`$(LogPath)'
 
 	SET @DATABASENAME = (SUBSTRING(@BACKUPFILENAME,0,CHARINDEX('.',@BACKUPFILENAME)))
 
@@ -134,7 +138,7 @@ BEGIN
 
 	SELECT @SQL ='RESTORE DATABASE ' + @DATABASENAME + ' FROM DISK = ''' +  @BackupFilePath + @BACKUPFILENAME + '''
 		WITH MOVE ''' + @MDFLOGICALNAME + ''' TO ''' + @DEST_PATH + @DATABASENAME + '.MDF'',
-		MOVE '''  + +  @LDFLOGICALNAME + ''' TO ''' + @DEST_PATH + @DATABASENAME + '.LDF'''
+		MOVE '''  + +  @LDFLOGICALNAME + ''' TO ''' + @DEST_LOGPATH + @DATABASENAME + '.LDF'''
 
 	EXEC (@SQL)
 	Print @BACKUPFILENAME + ' has been successfully restored.'
@@ -270,9 +274,18 @@ ForEach-Object {
 }
 
 # Set Script Variables and configure logging
-$scriptName = (Get-ChildItem $MyInvocation.MyCommand.Path).BaseName
-$logFileName = Join-Path $InstallLogsPath "$($scriptName)_%{+%Y%m%d}.log"
 New-Item -Path $InstallLogsPath -ItemType Directory -Force | Out-Null
+$scriptName = (Get-ChildItem $MyInvocation.MyCommand.Path).BaseName
+$Date = Get-Date -Format "yyyyMMdd"
+$LastFile = Get-ChildItem (Join-Path $InstallLogsPath "$($scriptName)_$($Date)_*.log") | Sort-Object Name
+If ($LastFile){
+    $LastFile.Name -match '\d+(?=\.)'
+    $Sequence = "{0:D2}" -f (([Int]$Matches[0])+1)
+} else {
+    $Sequence = '00'
+}
+#$logFileName = Join-Path $InstallLogsPath "$($scriptName)_%{+%Y%m%d}.log"
+$logFileName = Join-Path $InstallLogsPath "$($scriptName)_$($Date)_$Sequence.log"
 Set-LoggingDefaultLevel -Level 'DEBUG'
 Set-LoggingDefaultFormat '[%{timestamp:+%T%Z}] [%{level:-7}] %{message}'
 Add-LoggingTarget -Name Console -Configuration @{Format = '[%{timestamp:+%T} %{level:-7}] %{message}' }
@@ -301,23 +314,24 @@ $MyInvocation.MyCommand.Parameters.Keys | where {
     $_ -notin ([System.Management.Automation.Cmdlet]::CommonParameters) -and $_ -like '*Path*' } |
 ForEach-Object {
     $param = Get-Variable -Name $_
-    If (Test-Path -Path $param.Value -PathType Container) {
-        Write-Log -Level INFO -Message '{0} folder {1} exists' -Arguments @($param.Name, $param.Value)
-    }
-    else {
-        New-Item -Path $param.Value -Force -ItemType Directory | Out-Null
-        Write-Log -Level WARNING -Message '{0} folder {1} created' -Arguments @($param.Name, $param.Value)
+    IF ($param.Value) {
+        If (Test-Path -Path $param.Value -PathType Container) {
+            Write-Log -Level INFO -Message '{0} folder {1} exists' -Arguments @($param.Name, $param.Value)
+        }
+        else {
+            New-Item -Path $param.Value -Force -ItemType Directory | Out-Null
+            Write-Log -Level WARNING -Message '{0} folder {1} created' -Arguments @($param.Name, $param.Value)
+        }
     }
 }
 #endregion
 $ServerParams = @{
     ServerInstance = $ServerInstance
 }
-$Variable = @("BackupPath=$SQLBackupPath", "DataPath=$SQLDataPath")
 #region CheckSQLConnection
 Write-Log -Level INFO 'Connecting to SQL Server {0}' -Arguments $ServerInstance
 $ServerInfo = Get-SQLServerInfo @ServerParams
-if (!($ServerInfo)){
+if (!($ServerInfo)) {
     Write-Log -Level ERROR "`tFailed to retrieve server data - EXITING"
     Exit
 }
@@ -325,16 +339,41 @@ Write-Log -Level INFO -Message "`tSQL Version {0}" -Arguments $ServerInfo.Versio
 Write-Log -Level DEBUG -Message "`tSQLServer Name {0}" -Arguments $ServerInfo.ServerName
 Write-Log -Level DEBUG -Message "`tConnected as Login {0}" -Arguments $ServerInfo.Login
 Write-Log -Level DEBUG -Message "`tConnected to Database {0} as User {1}" -Arguments $ServerInfo.DBName, $ServerInfo.User
-if (!(Get-DBLogin -Login $ServerInfo.Login | where { $_.ServerRole -eq 'sysadmin' })){
+if (!($ServerInfo.IsAdmin)) {
     Write-Log -Level ERROR -Message "`tLogin {0} is not a member of 'sysadmin' role" -Arguments $ServerInfo.Login
     Exit
 }
-
 #endregion
-Exit
-$Restores = Invoke-Sqlcmd @ServerParams -Query $Query -Verbose -Variable $Variable
-Write-Log -Level INFO -Message "Restored {0} databases from {1}" -Arguments @($Restores.Count, $BackupPath)
+if (!($SQLBackupPath)) {
+    $SQLBackupPath = $ServerInfo.Default_Backup_path
+}
+if (!($SQLBackupPath.EndsWith('\'))) {
+    $SQLBackupPath += '\'
+}
+if (!($SQLDataPath)) {
+    $SQLDataPath = $ServerInfo.Default_Data_path
+}
+if (!($SQLDataPath.EndsWith('\'))) {
+    $SQLDataPath += '\'
+}
+if (!($SQLLogPath)) {
+    $SQLLogPath = $ServerInfo.Default_log_path
+}
+if (!($SQLLogPath.EndsWith('\'))) {
+    $SQLLogPath += '\'
+}
+
+$Variable = @("BackupPath=$SQLBackupPath", "DataPath=$SQLDataPath", "LogPath=$SQLLogPath")
+Write-Log -Level INFO -Message "Restoring Databases From {0}" -Arguments $SQLBackupPath
+Write-Log -Level DEBUG -Message "`tData Path: {0}" -Arguments $SQLDataPath
+Write-Log -Level DEBUG -Message "`tLog Path : {0}" -Arguments $SQLLogPath
+$RestoreLogFile = Join-Path (Split-Path $logFileName -Parent) "SQLRestore_$(Split-Path $LogFileName -Leaf)"
+$Restores = Invoke-Sqlcmd @ServerParams -Query $Query -Verbose -Variable $Variable 4> $RestoreLogFile
+Write-Log -Level INFO -Message "Restored {0} databases from {1}" -Arguments @($Restores.Count, $SQLBackupPath)
 foreach ($db in $Restores) {
     Invoke-Sqlcmd @ServerParams -Query $DropOrphanedUsersCommand -Database $DB[1] -Verbose
     Write-Log -Level INFO -Message "Removing Orphaned Users from Database {0}" -Arguments $DB[1]
 }
+Write-Log -Level INFO -Message "Script Completed"
+Wait-Logging
+Write-Output ""
