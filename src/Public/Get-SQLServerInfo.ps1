@@ -309,10 +309,12 @@ Function Get-SQLServerInfo {
                 USER_NAME() as [User],
                 SERVERPROPERTY('INSTANCEDEFAULTDATAPATH') AS [Default_Data_path],
                 SERVERPROPERTY('INSTANCEDEFAULTLOGPATH') AS  [Default_log_path],
+                SERVERPROPERTY('InstanceDefaultBackupPath') AS [Default_backup_path],
 				IS_SRVROLEMEMBER('sysadmin') AS [IsAdmin]
 "@
             $scriptCmd = { & $wrappedCmd @PSBoundParameters -Query $Query -ErrorAction Stop | `
-                    Select @{n = "Version"; e = { $_.Version.Split("`n")[0] } }, ServerName, Login, Database, User, Default_Data_path, Default_log_path, @{n = "IsAdmin"; e = { $_.IsAdmin -ne 0 } } }
+                    Select @{n = "Version"; e = { $_.Version.Split("`n")[0] } }, ServerName, Login, Database, User, `
+                    Default_Data_path, Default_log_path, Default_backup_path, @{n = "IsAdmin"; e = { $_.IsAdmin -ne 0 } } }
             $steppablePipeline = $scriptCmd.GetSteppablePipeline($myInvocation.CommandOrigin)
             $steppablePipeline.Begin($PSCmdlet)
         }
