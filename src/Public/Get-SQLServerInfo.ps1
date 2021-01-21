@@ -265,7 +265,7 @@ Function Get-SQLServerInfo {
 
         [string[]]
         ${Variable},
-<#
+        <#
         [ValidateNotNullOrEmpty()]
         [string]
         ${InputFile},
@@ -283,7 +283,7 @@ Function Get-SQLServerInfo {
         [Parameter(ParameterSetName = 'ByConnectionParameters')]
         [switch]
         ${IgnoreProviderContext},
-<#
+        <#
         [Alias('As')]
         [Microsoft.SqlServer.Management.PowerShell.OutputType]
         ${OutputAs},
@@ -308,9 +308,11 @@ Function Get-SQLServerInfo {
                 DB_NAME() as [Database],
                 USER_NAME() as [User],
                 SERVERPROPERTY('INSTANCEDEFAULTDATAPATH') AS [Default_Data_path],
-                SERVERPROPERTY('INSTANCEDEFAULTLOGPATH') AS  [Default_log_path]
+                SERVERPROPERTY('INSTANCEDEFAULTLOGPATH') AS  [Default_log_path],
+				IS_SRVROLEMEMBER('sysadmin') AS [IsAdmin]
 "@
-            $scriptCmd = {& $wrappedCmd @PSBoundParameters -Query $Query | Select @{n="Version";e={$_.Version.Split("`n")[0]}},ServerName,Login,Database,User,Default_Data_path,Default_log_path}
+            $scriptCmd = { & $wrappedCmd @PSBoundParameters -Query $Query -ErrorAction Stop | `
+                    Select @{n = "Version"; e = { $_.Version.Split("`n")[0] } }, ServerName, Login, Database, User, Default_Data_path, Default_log_path, @{n = "IsAdmin"; e = { $_.IsAdmin -ne 0 } } }
             $steppablePipeline = $scriptCmd.GetSteppablePipeline($myInvocation.CommandOrigin)
             $steppablePipeline.Begin($PSCmdlet)
         }
@@ -340,4 +342,3 @@ Function Get-SQLServerInfo {
 
 
 } # End of function: Get-DBObjects
-Get-SQLServerInfo

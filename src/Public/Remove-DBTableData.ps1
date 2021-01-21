@@ -342,4 +342,3 @@ Function Remove-DBTableData {
         }
     }
 }
-Remove-DBTableData -Database 'MNPServiceCfg' -TableName 'UserCfg'

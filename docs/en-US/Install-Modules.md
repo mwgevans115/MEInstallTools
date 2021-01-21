@@ -5,7 +5,7 @@ online version:
 schema: 2.0.0
 ---
 
-# ConvertTo-PlainText
+# Install-Modules
 
 ## SYNOPSIS
 {{ Fill in the Synopsis }}
@@ -13,7 +13,7 @@ schema: 2.0.0
 ## SYNTAX
 
 ```
-ConvertTo-PlainText [[-EncryptedString] <SecureString>] [<CommonParameters>]
+Install-Modules [[-Modules] <String[]>] [[-Scope] <Object>] [<CommonParameters>]
 ```
 
 ## DESCRIPTION
@@ -30,16 +30,32 @@ PS C:\> {{ Add example code here }}
 
 ## PARAMETERS
 
-### -EncryptedString
-{{ Fill EncryptedString Description }}
+### -Modules
+{{ Fill Modules Description }}
 
 ```yaml
-Type: SecureString
+Type: String[]
 Parameter Sets: (All)
 Aliases:
 
 Required: False
 Position: 0
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -Scope
+{{ Fill Scope Description }}
+
+```yaml
+Type: Object
+Parameter Sets: (All)
+Aliases:
+Accepted values: CurrentUser, AllUsers
+
+Required: False
+Position: 1
 Default value: None
 Accept pipeline input: False
 Accept wildcard characters: False
