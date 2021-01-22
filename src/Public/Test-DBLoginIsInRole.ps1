@@ -300,18 +300,22 @@ Function Test-DBLoginIsInRole {
         [ValidateNotNullOrEmpty()]
         [string]
         $DBLogin
-        )
+    )
 
     begin {
         $Query = @"
+
+        PRINT 'LOGIN=`$(LOGIN)'
+        PRINT 'ROLE=`$(ROLE)'
+        PRINT DB_NAME()
         DECLARE @DBUSER VARCHAR(50)
         SELECT @DBUSER = name
         FROM sys.database_principals
-        WHERE SUSER_SID('`@(LOGIN)')=sys.database_principals.sid
-        SELECT IS_ROLEMEMBER('`$(ROLE)',@DBUSER)
+        WHERE SUSER_SID('`$(LOGIN)')=sys.database_principals.sid
+        PRINT @DBUSER
+        SELECT @DBUSER AS [DBUserName],'`$(ROLE)' AS [DBRole], IS_ROLEMEMBER('`$(ROLE)',@DBUSER) AS [ISROLEMEMBER]
 "@
-        $Variable = @("ROLE=$DBRole","LOGIN=$DBLogin")
-
+        $Variable = @("ROLE=$DBRole", "LOGIN=$DBLogin")
         try {
             $outBuffer = $null
             if ($PSBoundParameters.TryGetValue('OutBuffer', [ref]$outBuffer)) {
@@ -320,9 +324,25 @@ Function Test-DBLoginIsInRole {
             $PSBoundParameters.Remove('DBLogin') | Out-Null
             $PSBoundParameters.Remove('DBRole') | Out-Null
             $wrappedCmd = $ExecutionContext.InvokeCommand.GetCommand('SqlServer\Invoke-Sqlcmd', [System.Management.Automation.CommandTypes]::Cmdlet)
-
-            $scriptCmd = { & $wrappedCmd @PSBoundParameters -Query $Query -Variable $Variable -ErrorAction Stop | `
-                              ForEach-Object {if ($IsMember){($IsMember -eq 1)}else{$null} }}
+            Write-Verbose $Query
+            $scriptCmd = { & $wrappedCmd @PSBoundParameters -Query $Query -Variable $Variable -ErrorAction Stop | ForEach-Object {
+                    IF ('' -ne $_.DBUserName -and $null -ne $_.DBUserName) {
+                        IF ($_.ISROLEMEMBER) {
+                            ($_.ISROLEMEMBER -eq 1)
+                            $Result1 = [PSCustomObject]@{
+                                User = $_.DBUserName
+                                ISROLEMEMBER = $_.ISROLEMEMBER
+                            }
+                        } else {
+                            Write-Verbose 'Invalid Role'
+                            $false
+                        }
+                    } else {
+                        Write-Verbose 'No User'
+                        $null
+                    }
+                }
+            }
             $steppablePipeline = $scriptCmd.GetSteppablePipeline($myInvocation.CommandOrigin)
             $steppablePipeline.Begin($PSCmdlet)
         }
@@ -348,7 +368,18 @@ Function Test-DBLoginIsInRole {
             throw
         }
     }
-
-
-
 } # End of function: Get-DBObjects
+<#
+Write-Output *************************************************************
+$VerbosePreference = 'Continue' # Continue
+Write-Output 'Master\dbowner\MarkEvans'
+Test-DBLoginIsInRole -Database 'Master' -DBRole 'db_owner' -DBLogin 'MarkEvans'
+Write-Output 'MNPUserMaster\dbowner\MarkEvans'
+Test-DBLoginIsInRole -Database 'MNPUserMaster' -DBRole 'db_owner' -DBLogin 'MarkEvans'
+Write-Output 'MNPUserMaster\dbowner\Orderavtiv'
+Test-DBLoginIsInRole -Database 'MNPUserMaster' -DBRole 'db_owner' -DBLogin 'OrderActive'
+Write-Output 'MNPUserMaster\dbsecurityadmin\MarkEvans'
+Test-DBLoginIsInRole -Database 'MNPUserMaster' -DBRole 'db_securityadmin' -DBLogin 'MarkEvans'
+Write-Output 'MNPUserMaster\fred\markevans'
+Test-DBLoginIsInRole -Database 'MNPUserMaster' -DBRole 'fred' -DBLogin 'MarkEvans'
+#>
