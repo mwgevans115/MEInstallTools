@@ -277,7 +277,7 @@ ForEach-Object {
 New-Item -Path $InstallLogsPath -ItemType Directory -Force | Out-Null
 $scriptName = (Get-ChildItem $MyInvocation.MyCommand.Path).BaseName
 $Date = Get-Date -Format "yyyyMMdd"
-$LastFile = Get-ChildItem (Join-Path $InstallLogsPath "$($scriptName)_$($Date)_*.log") | Sort-Object Name
+$LastFile = Get-ChildItem (Join-Path $InstallLogsPath "$($scriptName)_$($Date)_*.log") | Sort-Object Name | Select -Last 1
 If ($LastFile){
     $LastFile.Name -match '\d+(?=\.)'
     $Sequence = "{0:D2}" -f (([Int]$Matches[0])+1)

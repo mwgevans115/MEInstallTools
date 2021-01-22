@@ -322,7 +322,7 @@ Function Test-DBLoginIsInRole {
             $wrappedCmd = $ExecutionContext.InvokeCommand.GetCommand('SqlServer\Invoke-Sqlcmd', [System.Management.Automation.CommandTypes]::Cmdlet)
 
             $scriptCmd = { & $wrappedCmd @PSBoundParameters -Query $Query -Variable $Variable -ErrorAction Stop | `
-                              ForEach-Object {($IsMember -ne 0) }}
+                              ForEach-Object {if ($IsMember){($IsMember -eq 1)}else{$null} }}
             $steppablePipeline = $scriptCmd.GetSteppablePipeline($myInvocation.CommandOrigin)
             $steppablePipeline.Begin($PSCmdlet)
         }

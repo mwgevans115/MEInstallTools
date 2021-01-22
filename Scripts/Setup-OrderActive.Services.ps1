@@ -49,6 +49,82 @@ Write-Log -Level DEBUG -Message "`tUser   : {0}" -Arguments $CredentialManagerCr
 Write-Log -Level DEBUG -Message "`tComment: {0}" -Arguments $CredentialManagerCredential.Comment
 
 #endregion orderactivecredentials
+#region Load Install Support Module
+Remove-Module MEInstallTools -Force -ErrorAction SilentlyContinue
+If (Get-Module -ListAvailable -Name MEInstallTools) {
+    Import-Module MEInstallTools
+}
+else {
+    $Module = (Get-ChildItem -Path .\src\* -Recurse -Include 'MEInstallTools.psd1' | Select -First 1).FullName
+    Import-Module $Module
+}
+#endregion Load Install Support Module
+Install-Modules -Modules @('PackageManagement', 'Logging', 'SqlServer')
+#region Initialise
+$MyInvocation.MyCommand.Parameters.Keys | where { -not $PSBoundParameters.ContainsKey($_) -and `
+    $_ -notin ([System.Management.Automation.Cmdlet]::CommonParameters) } |
+ForEach-Object {
+$Param = $MyInvocation.MyCommand.Parameters[$_]
+$value = $null
+$Message = $Param.Attributes[0].HelpMessage
+$default = (Get-Variable -Name $_).Value
+If (!([string]::IsNullOrEmpty($Message))) {
+    if (!($value = Read-Host "$Message [$default]")) { $value = $default }
+    Set-Variable -Name $_ -Value $value
+}
+}
+
+# Set Script Variables and configure logging
+New-Item -Path $InstallLogsPath -ItemType Directory -Force | Out-Null
+$scriptName = (Get-ChildItem $MyInvocation.MyCommand.Path).BaseName
+$Date = Get-Date -Format "yyyyMMdd"
+$LastFile = Get-ChildItem (Join-Path $InstallLogsPath "$($scriptName)_$($Date)_*.log") | Sort-Object Name | Select Last 1¬
+If ($LastFile){
+$LastFile.Name -match '\d+(?=\.)'
+$Sequence = "{0:D2}" -f (([Int]$Matches[0])+1)
+} else {
+$Sequence = '00'
+}
+$logFileName = Join-Path $InstallLogsPath "$($scriptName)_$($Date)_$Sequence.log"
+Set-LoggingDefaultLevel -Level 'DEBUG'
+Set-LoggingDefaultFormat '[%{timestamp:+%T%Z}] [%{level:-7}] %{message}'
+Add-LoggingTarget -Name Console -Configuration @{Format = '[%{timestamp:+%T} %{level:-7}] %{message}' }
+Add-LoggingTarget -Name File -Configuration @{Path = $logFileName
+Format                                         = '[%{timestamp:+%T%Z}] [%{level:-7}] %{message}'
+}
+Write-Log -Level INFO -Message "Running Script $scriptName"
+
+# Print all Parameters Values if Verbose
+$Title = " Parameter Values "
+Write-Log -Level INFO -Message '{0}' -Arguments $Title.PadLeft(40 + ($Title.Length / 2), '*').PadRight(80, '*')
+$Length = ($MyInvocation.MyCommand.Parameters.Keys | where {
+    $_ -notin ([System.Management.Automation.Cmdlet]::CommonParameters) } | Sort-Object { $_.name.length }  | select -last 1).length
+$MyInvocation.MyCommand.Parameters.Keys | where {
+$_ -notin ([System.Management.Automation.Cmdlet]::CommonParameters) } |
+ForEach-Object {
+$param = Get-Variable -Name $_
+Write-Log -Level INFO -Message "`t{0}:`t{1}" -Arguments @($param.Name.PadRight($Length, ' '), $param.Value)
+#Write-Verbose "$($param.Name) --> $($param.Value)"
+}
+$Title = ""
+Write-Log -Level INFO -Message '{0}' -Arguments $Title.PadLeft(40 + ($Title.Length / 2), '*').PadRight(80, '*')
+
+# Create all Path's set in parameters
+$MyInvocation.MyCommand.Parameters.Keys | where {
+$_ -notin ([System.Management.Automation.Cmdlet]::CommonParameters) -and $_ -like '*Path*' } |
+ForEach-Object {
+$param = Get-Variable -Name $_
+IF ($param.Value) {
+    If (Test-Path -Path $param.Value -PathType Container) {
+        Write-Log -Level INFO -Message '{0} folder {1} exists' -Arguments @($param.Name, $param.Value)
+    }
+    else {
+        New-Item -Path $param.Value -Force -ItemType Directory | Out-Null
+        Write-Log -Level WARNING -Message '{0} folder {1} created' -Arguments @($param.Name, $param.Value)
+    }
+}
+}
+#endregion
 
 $InitMNPServiceCfgScript = Join-Path $ServiceSoftwarePath SQLScripts\MNPServiceCfg_InitialData_Insert.sql
 $InitMNPServiceCfgScript = 'C:\Users\MarkEvans\Repos\GitHub\PowerShellScripts\Raider-Scripts\MNPServiceCfg_InitialData_Insert.sql'
@@ -56,43 +132,94 @@ $InitMNPServiceCfgScript = 'C:\Users\MarkEvans\Repos\GitHub\PowerShellScripts\Ra
 $SQLParams = @{
     ServerInstance = $ServerInstance
 }
+$RequiredDatabases = @('OrderActive', 'MNPServiceCfg', 'MNPCalendar', 'MNPUserMaster', 'Fred')
+$AvailableDatabases = @()
+$OrderActiveUserrole = 'db_owner'
+
+#region CheckSQLConnection
 Write-Log -Level INFO 'Connecting to SQL Server {0}' -Arguments $ServerInstance
-$Query = 'Select @@VERSION as [Version], @@SERVERNAME As [ServerName], SUSER_NAME() as [Login], DB_NAME() as [Database], USER_NAME() as [User]'
-$SQLResult = SQLSERVER\Invoke-Sqlcmd @SQLParams -Query  $Query
-if (!($SQLResult.HasErrors)) {
-    $ServerInfo = @{
-        Version = $SQLResult.Version.Split("`n")[0]
-        Server  = $SQLResult.ServerName
-        Login   = $SQLResult.Login
-        DBName  = $SQLResult.Database
-        User    = $SQLResult.User
-    }
-}
-$Query = "SELECT SP1.[name] AS 'Login', SP2.[name] AS 'ServerRole' FROM sys.server_principals SP1 JOIN sys.server_role_members SRM ON SP1.principal_id = SRM.member_principal_id JOIN sys.server_principals SP2 ON SRM.role_principal_id = SP2.principal_id"# Where SP1.[name] = SUSER_NAME()"
-$SQLResult = SQLSERVER\Invoke-Sqlcmd @SQLParams -Query  $Query
-if (!($SQLResult.HasErrors)) {
-    $ServerInfo.Roles = $SQLResult.ServerRole
-    If ($ServerInfo.Roles -notcontains 'sysadmin') {
-        Write-Log -Level ERROR -Message 'Not logged in with sysadmin rights'
-    }
+$ServerInfo = Get-SQLServerInfo @ServerParams
+if (!($ServerInfo)) {
+    Write-Log -Level ERROR "`tFailed to retrieve server data - EXITING"
+    Exit
 }
 Write-Log -Level INFO -Message "`tSQL Version {0}" -Arguments $ServerInfo.Version
-Write-Log -Level DEBUG -Message "`tSQLServer Name {0}" -Arguments $ServerInfo.Server
+Write-Log -Level DEBUG -Message "`tSQLServer Name {0}" -Arguments $ServerInfo.ServerName
 Write-Log -Level DEBUG -Message "`tConnected as Login {0}" -Arguments $ServerInfo.Login
 Write-Log -Level DEBUG -Message "`tConnected to Database {0} as User {1}" -Arguments $ServerInfo.DBName, $ServerInfo.User
+if (!($ServerInfo.IsAdmin)) {
+    Write-Log -Level ERROR -Message "`tLogin {0} is not a member of 'sysadmin' role" -Arguments $ServerInfo.Login
+    Exit
+}
+#endregion
 
 # Test Required Databases
+#region Check Required Databases Exist
 Write-Log -Level INFO -Message "Checking Databases Exist"
-@('OrderActive', 'MNPServiceCfg', 'MNPCalendar', 'MNPUserMaster', 'Fred') | ForEach-Object {
+$RequiredDatabases | ForEach-Object {
     $db = Get-SqlDatabase @SQLParams -Name $_ -ErrorAction SilentlyContinue
     if ($db) {
         Write-Log -Level DEBUG -Message "`tDatabase {0} Exists Size: {1}" -Arguments $db.Name, $db.Size
+        $AvailableDatabases += $db.Name
     }
     else {
         Write-Log -Level ERROR -Message "`tDatabase {0} does not exist" -Arguments $_
         $PreRequisites = $false
     }
 }
+#endregion
+
+#region Checking/Creating OrderActive Login
+Write-Log -Level INFO -Message "Checking/Creating Login on {0}" -Arguments $SQLParams.ServerInstance
+$Login = Get-SqlLogin @SQLParams -LoginName $OrderActiveUserCredential.UserName -ErrorAction SilentlyContinue
+If ($Login) {
+    Write-Log -Level INFO -Message "`tLogin {0} Exists" -Arguments $OrderActiveUserCredential.UserName
+    try {
+        Invoke-Sqlcmd @SQLParams -Query 'Select ''String''' -Credential $OrderActiveUserCredential -ErrorAction SilentlyContinue
+    }
+    catch {
+        if (Invoke-Sqlcmd @SQLParams -Query "Exec sp_who" | Where-Object {$_.ItemArray[3] -eq $OrderActiveUserCredential.UserName}){
+            Write-Log -Level ERROR -Message "`tIncorrect Credentials and User {0} Logged In" -Arguments $OrderActiveUserCredential.UserName
+            $PreRequisites = $false
+        } else {
+            Remove-SqlLogin @SQLParams -LoginName $OrderActiveUserCredential.UserName -Force
+            Write-Log -Level WARNING -Message "`tIncorrect Credentials - Removing Login {0}" -Arguments $OrderActiveUserCredential.UserName
+        }
+    }
+}
+$Login = Get-SqlLogin @SQLParams -LoginName $OrderActiveUserCredential.UserName -ErrorAction SilentlyContinue
+If (!($Login)) {
+    Write-Log -Level WARNING -Message "`tCreating New Login {0}" -Arguments $OrderActiveUserCredential.UserName
+    Add-SqlLogin @SQLParams -LoginPSCredential $OrderActiveUserCredential `
+        -Enable -LoginType SqlLogin -EnforcePasswordExpiration:$false `
+        -DefaultDatabase 'OrderActive' -GrantConnectSql -MustChangePasswordAtNextLogin:$false | Out-Null
+}
+#endregion
+#region Check Available Database Permissions
+$AvailableDatabases | ForEach-Object {
+    Test-DBLoginIsInRole -Database $_ -DBLogin $OrderActiveUserCredential.UserName -DBRole $OrderActiveUserRole
+
+    $userRoles = Get-DBLogin -Login $OrderActiveUserCredential.UserName -Database $_ -OutputAs DataTables
+    $dvRoles = New-Object System.Data.DataView($userRoles)
+    $dvRoles.RowFilter = "Isnull(DBUserName,'') = ''"   #"DBUserName <> ''"
+    if ($dvRoles.Count -gt 0){
+        Write-Log -Level WARNING "`tAdding User {0} for Login {1} on Database {2}" -Arguments $OrderActiveUserCredential.UserName,$OrderActiveUserCredential.UserName,$_
+        $Query = "DROP USER IF EXISTS $($OrderActiveUserCredential.UserName); CREATE USER $($OrderActiveUserCredential.UserName) FOR LOGIN $($OrderActiveUserCredential.UserName);"
+        Invoke-Sqlcmd @SQLParams -Database $_ -Query $Query
+    } else {
+        Write-Log -Level DEBUG -Message "`tUser {0} for Login {1} on Database {2} {3}" -Arguments $OrderActiveUserCredential.UserName,$OrderActiveUserCredential.UserName,$_,'EXISTS'
+    }
+    $dvRoles.RowFilter = "DBUserRole = '$OrderActiveUserRole'"
+    if ($dvRoles.Count -gt 0) {
+        Write-Log -Level DEBUG -Message "`tUser {0} in db_owner role on Database {1}" -Arguments $OrderActiveUserCredential.UserName,$_
+    }
+    else {
+        Write-Log -Level WARNING -Message "`tUser {0} not in db_owner role on Database {1}" -Arguments $OrderActiveUserCredential.UserName,$_
+        $Query = "ALTER ROLE [db_owner] ADD MEMBER [$($OrderActiveUserCredential.UserName)]"
+        Invoke-Sqlcmd @SQLParams -Database $_ -Query $Query
+    }
+}
+#endregion
 
 # Check SQL Objects
 $CheckObjects = Get-Content $PSScriptRoot\Services-DBObjects.JSON | ConvertFrom-Json
