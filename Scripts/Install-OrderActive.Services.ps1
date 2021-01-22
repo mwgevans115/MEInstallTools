@@ -2,25 +2,17 @@
 param (
     [Parameter(HelpMessage = "Path to install Services")]
     $SoftwarePath = "C:\MNP\Server",
-    [Parameter()]
-    $PreReequisitePath = "C:\MNP\PreRequisites",
     [Parameter(HelpMessage = "Path to backup Services")]
     $SoftwareBackupPath = "C:\MNP\Backup",
     [Parameter(HelpMessage = "Path to install logs")]
-    $InstallLogsPath = "C:\MNP\Logs",
+    $InstallLogsPath = "C:\MNP\InstallLogs",
     [Parameter(HelpMessage = "URL for sharepoint site")]
     $URL = 'https://mnpmedialtd.sharepoint.com/sites/Releases',
     [Parameter(HelpMessage = "Sharepoint location for
     OrderActive Services")]
     $DocumentFolder = 'Shared Documents\Latest\OrderActive.Services\Unicode'
 )
-Clear-Host
-
-# Update NuGet and package management (Admin Required)
-Install-PackageProvider Nuget –Force
-Install-Module –Name PowerShellGet –Force
-
-# Load Install Support Module
+#region Load Install Support Module
 Remove-Module MEInstallTools -Force -ErrorAction SilentlyContinue
 If (Get-Module -ListAvailable -Name MEInstallTools) {
     Import-Module MEInstallTools
@@ -29,16 +21,9 @@ else {
     $Module = (Get-ChildItem -Path .\src\* -Recurse -Include 'MEInstallTools.psd1' | Select -First 1).FullName
     Import-Module $Module
 }
-
-# Install Required Modules from Powershell Gallery
-$Modules = @("SharePointPnPPowerShellOnline", "7Zip4Powershell", "Logging")
-foreach ($module in $modules) {
-    if ((Get-Module -Name $module -ListAvailable | Sort-Object Version | Select-Object -Last 1).Version -lt [version](Find-Module -Name $module).Version) {
-        Write-Verbose "Installing/Updating $Module"
-        Install-Module -Name $Module -Force -AllowClobber -Scope CurrentUser
-    }
-}
-# Get User Input for Parameters not explicitly set
+#endregion Load Install Support Module
+Install-Modules -Modules @('PackageManagement', 'Logging', 'SqlServer', '7Zip4Powershell', 'SharePointPnPPowerShellOnline')
+#region Initialise
 $MyInvocation.MyCommand.Parameters.Keys | where { -not $PSBoundParameters.ContainsKey($_) -and `
         $_ -notin ([System.Management.Automation.Cmdlet]::CommonParameters) } |
 ForEach-Object {
@@ -53,10 +38,20 @@ ForEach-Object {
 }
 
 # Set Script Variables and configure logging
-$scriptName = (Get-ChildItem $MyInvocation.MyCommand.Path).BaseName
-$logFileName = Join-Path $InstallLogsPath "$($scriptName)_%{+%Y%m%d}.log"
 New-Item -Path $InstallLogsPath -ItemType Directory -Force | Out-Null
-Set-LoggingDefaultLevel -Level 'INFO'
+$scriptName = (Get-ChildItem $MyInvocation.MyCommand.Path).BaseName
+$Date = Get-Date -Format "yyyyMMdd"
+$LastFile = Get-ChildItem (Join-Path $InstallLogsPath "$($scriptName)_$($Date)_*.log") | Sort-Object Name | Select -Last 1
+If ($LastFile) {
+    $LastFile.Name -match '\d+(?=\.)'
+    $Sequence = "{0:D2}" -f (([Int]$Matches[0]) + 1)
+}
+else {
+    $Sequence = '00'
+}
+#$logFileName = Join-Path $InstallLogsPath "$($scriptName)_%{+%Y%m%d}.log"
+$logFileName = Join-Path $InstallLogsPath "$($scriptName)_$($Date)_$Sequence.log"
+Set-LoggingDefaultLevel -Level 'DEBUG'
 Set-LoggingDefaultFormat '[%{timestamp:+%T%Z}] [%{level:-7}] %{message}'
 Add-LoggingTarget -Name Console -Configuration @{Format = '[%{timestamp:+%T} %{level:-7}] %{message}' }
 Add-LoggingTarget -Name File -Configuration @{Path = $logFileName
@@ -84,24 +79,29 @@ $MyInvocation.MyCommand.Parameters.Keys | where {
     $_ -notin ([System.Management.Automation.Cmdlet]::CommonParameters) -and $_ -like '*Path*' } |
 ForEach-Object {
     $param = Get-Variable -Name $_
-    If (Test-Path -Path $param.Value -PathType Container) {
-        Write-Log -Level INFO -Message '{0} folder {1} exists' -Arguments @($param.Name, $param.Value)
-    }
-    else {
-        New-Item -Path $param.Value -Force -ItemType Directory | Out-Null
-        Write-Log -Level WARNING -Message '{0} folder {1} created' -Arguments @($param.Name, $param.Value)
+    IF ($param.Value) {
+        If (Test-Path -Path $param.Value -PathType Container) {
+            Write-Log -Level INFO -Message '{0} folder {1} exists' -Arguments @($param.Name, $param.Value)
+        }
+        else {
+            New-Item -Path $param.Value -Force -ItemType Directory | Out-Null
+            Write-Log -Level WARNING -Message '{0} folder {1} created' -Arguments @($param.Name, $param.Value)
+        }
     }
 }
+#endregion
 
-# Backup existing software folder
+#region Backup existing software folder
 $BackupArchive = Join-Path $SoftwareBackupPath "$(Split-Path $SoftwarePath -Leaf) $(get-date -Format "yyyy-MM-dd HHmm").7z"
 $BackupChanges = Join-Path $SoftwareBackupPath "$scriptName $(get-date -Format "yyyy-MM-dd HHmm").7z"
 if (Get-ChildItem -Path $SoftwarePath -File -Recurse) {
     Write-Log -Level WARNING 'Backing up {0} to {1}' -Arguments $SoftwarePath, $BackupArchive
     Compress-7Zip -ArchiveFileName $BackupArchive -Path $SoftwarePath
 }
+#endregion
 
-# Download Pre-Requisites
+#region Download Pre-Requisites
+
 Write-Log -Level INFO "Downloading Pre-Requisites"
 $PreRequisites = @('https://aka.ms/vs/16/release/vc_redist.x64.exe',
     'https://aka.ms/vs/16/release/vc_redist.x86.exe',
@@ -133,6 +133,7 @@ $PreRequisites | ForEach-Object {
         Copy-Item -Path $_.FullName -Destination $PreRequisiteFolder -Force
     }
 }
+#endregion
 
 # If server opertating system configure enhanced security
 if (Get-CimInstance -ClassName Win32_OperatingSystem | Where-Object { $_.Name -like '*server*' }) {
@@ -161,18 +162,29 @@ $Downloads | ForEach-Object {
         Copy-Item $_.FullName -Destination $TargetPath -Force
     }
 }
+# Move Scripts Folder
+$ScriptFolders = Get-ChildItem -Path (Join-Path $TargetPath '*') -Recurse -Include 'Scripts'
+$ScriptFolders | ForEach-Object {
+    $ScriptsFolder = $_.FullName
+    $SoftwareFolder = (Get-ChildItem -Path (Join-Path $TargetPath '*') -Recurse -Include 'Software' | Select -First 1).FullName
+    Move-Item $ScriptsFolder $SoftwareFolder -Force
+}
 
 # Check if any downloaded exes are running as services - query user if they are
+Write-Log -Level INFO -Message "Checking for Running Services"
 [System.Collections.ArrayList]$runningServiceList = @()
 Get-ChildItem -Path (Join-Path $TargetPath '*') -Recurse -Include 'Software' | ForEach-Object {
     Get-ChildItem (Join-Path $_.FullName '*') -Include '*.exe' } | Select Name | ForEach-Object {
     $RegEx = ".*$($_.Name)[ ""].*"
-    $runningServiceList.Add( (Get-CimInstance -ClassName win32_service | `
-                Where-Object { -not ($_.PathName -match $RegEx -and $_.State -ne 'Stopped') } | `
-                Select Name, DisplayName, State, PathName -First 1))
+    $RunningService = (Get-CimInstance -ClassName win32_service | `
+            Where-Object { ($_.PathName -match $RegEx -and $_.State -ne 'Stopped') } | `
+            Select Name, DisplayName, State, PathName -First 1)
+    if ($RunningService) {
+        $runningServiceList.Add($RunningService) | Out-Null
+    }
 }
 If ($runningServiceList.Count -ne 0 ) {
-    $runningServiceList | ForEach-Object { Write-Log -Level WARNING -Message 'Service {0} is {1}' -Arguments $_.DisplayName, $_.State }
+    $runningServiceList | ForEach-Object { Write-Log -Level WARNING -Message "`tService {0} is {1}" -Arguments $_.DisplayName, $_.State }
     Wait-Logging
     $Title = "Services Running"
     $Info = "Select Option to continue"
@@ -180,13 +192,14 @@ If ($runningServiceList.Count -ne 0 ) {
     [int]$defaultchoice = 2
     $opt = $host.UI.PromptForChoice($Title , $Info , $Options, $defaultchoice)
     switch ($opt) {
-        0 { Write-Log -Level WARNING "Stopping Services"; $runningServiceList | ForEach-Object {Get-Service $_.Name | Stop-Service -PassThru } }
-        1 { Write-Log -Level WARNING "User requested Continue"; Write-Log -Level ERROR "System will need to be restarted to complete installation" }
-        2 { Write-Log -Level ERROR "User Requested Exit"; Exit }
+        0 { Write-Log -Level WARNING "`tStopping Services"; $runningServiceList | ForEach-Object { Get-Service $_.Name | Stop-Service -PassThru } }
+        1 { Write-Log -Level WARNING "`tUser requested Continue"; Write-Log -Level ERROR "System will need to be restarted to complete installation" }
+        2 { Write-Log -Level ERROR "`tUser Requested Exit"; Exit }
     }
 }
 
 # Prepare temp folder to backup changed files validate files to update
+Write-Log -Level INFO -Message 'Backing up changed files'
 $TempBackupFolder = New-TempFolder (Split-Path $SoftwarePath -Leaf)
 [System.Collections.ArrayList]$fileList = @()
 Get-ChildItem -Path (Join-Path $TargetPath '*') -Recurse -Include 'Software' | ForEach-Object {
@@ -204,38 +217,39 @@ Get-ChildItem -Path (Join-Path $TargetPath '*') -Recurse -Include 'Software' | F
                 }) | Out-Null
         }
         else {
-            Write-Log -Level INFO -Message "File not changed {0}" -Arguments $TargetFile
+            Write-Log -Level DEBUG -Message "`tFile not changed {0}" -Arguments $TargetFile
         }
     }
 }
 # Log if any files can't be updated immediately if access denied exit
 If ($fileList | Where { $_.IsLocked -eq 'AccessDenied' }) {
     $fileList | Where { $_.IsLocked -eq 'AccessDenied' } | ForEach-Object {
-        Write-Log -Level ERROR -Message 'Acccess Denied to {0}' -Arguments $_.Target
+        Write-Log -Level ERROR -Message "`tAcccess Denied to {0}" -Arguments $_.Target
     }
-    Write-Log -Level ERROR -Message 'Insufficient Permissions to Install Files Aborting'
+    Write-Log -Level ERROR -Message "Insufficient Permissions to Install Files Aborting"
     Remove-Item $TempBackupFolder -Recurse -Force
     Exit
 }
 If ($fileList | Where { $_.IsLocked }) {
     $fileList | Where { $_.IsLocked } | ForEach-Object {
-        Write-Log -Level WARNING -Message 'File in use {0} reboot to update' -Arguments $_.Target
+        Write-Log -Level WARNING -Message "`tFile in use {0} reboot to update" -Arguments $_.Target
     }
 }
+Write-Log -Level INFO -Message 'Actioning File Changes'
 # Update files, backing up changes and scheduling update of locked files
 foreach ($file in $fileList) {
     if (Test-Path $file.Target) {
-        Write-Log -Level INFO -Message 'Backing up {0}' -Arguments $file.Target
+        Write-Log -Level INFO -Message "`tBacking up {0}" -Arguments $file.Target
         New-Item -Path (Split-Path $file.Backup -Parent) -ItemType Directory -Force | Out-Null
         Copy-Item $file.Target $file.Backup -Force
     }
     New-Item (Split-Path $file.Target -Parent) -ItemType Directory -Force | Out-Null
     if ($file.IsLocked) {
-        Write-Log -Level WARNING -Message 'Scheduling Install of {0}' -Arguments $file.Target
+        Write-Log -Level WARNING -Message "`tScheduling Install of {0}" -Arguments $file.Target
         Move-FileOnReboot $file.Source $file.Target -ReplaceExisting
     }
     else {
-        Write-Log -Level WARNING -Message 'Installing {0}' -Arguments $file.Target
+        Write-Log -Level WARNING -Message "`tInstalling {0}" -Arguments $file.Target
         Move-Item $file.Source $file.Target -Force
     }
 }
@@ -245,7 +259,7 @@ If (Get-ChildItem $TempBackupFolder -Recurse -File) {
     Compress-7Zip -ArchiveFileName $BackupChanges -Path $TempBackupFolder -PreserveDirectoryRoot -SkipEmptyDirectories -Append:(Test-Path $BackupChanges)
 }
 else {
-    Write-Log -Level WARNING -Message 'No Files Changed'
+    Write-Log -Level WARNING -Message "`tNo Files Changed"
 }
 # Clean up temp folders
 Remove-Item $TempBackupFolder -Recurse -Force
@@ -258,5 +272,6 @@ if ($InternetESCSettings) {
 }
 
 
+Write-Log -Level INFO -Message "Script Completed"
 Wait-Logging
-Exit
+Write-Output ""
