@@ -15,7 +15,7 @@ function Install-Software {
         if ($PSCmdlet.ShouldProcess("$($Package.ProductName)", "Installing")) {
             If ((Get-Module -Name Logging) -and (Get-LoggingTarget)) { Write-Log -Level WARNING "Installing {0}" -Arguments $Package.ProductName }
             else { Write-Verbose "Installing $($Package.ProductName)" }
-            $result = Install-Package $Source | Out-Null
+            $result = Install-Package $Source
         }
     }
     elseif ([version]$Installed.Version -lt [version]$Package.Version) {
@@ -42,5 +42,8 @@ function Install-Software {
             Write-Verbose "Installed $($Installed.Version)"
         }
     }
-    $result | Out-Null
+    if (-not ($result) -or $result.ExitCode -eq 0){
+        return $true
+    }
+    return $false
 }

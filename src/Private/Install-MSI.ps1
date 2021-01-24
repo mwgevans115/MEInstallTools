@@ -9,7 +9,7 @@ function Install-MSI {
         $MSI = Get-ChildItem $FilleName
     }
     $DataStamp = get-date -Format yyyyMMddTHHmmss
-    $logFile = '{0}-{1}.log' -f $MSI.FullName, $DataStamp
+    #$logFile = '{0}-{1}.log' -f $MSI.FullName, $DataStamp
     $MSIArguments = @(
         "/i"
         ('"{0}"' -f $MSI.FullName)
@@ -18,9 +18,8 @@ function Install-MSI {
         "IACCEPTMSOLEDBSQLLICENSETERMS=YES"
         #"/q"
         "/norestart"
-        "/L*v"
-        $logFile
-
+        #"/L*v"
+        #$logFile
     )
     $result = Start-Process "msiexec.exe" -ArgumentList $MSIArguments -Wait -NoNewWindow -PassThru
     return $result

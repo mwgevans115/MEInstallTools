@@ -325,12 +325,12 @@ ForEach-Object {
     }
 }
 #endregion
-$ServerParams = @{
+$SQLParams = @{
     ServerInstance = $ServerInstance
 }
 #region CheckSQLConnection
 Write-Log -Level INFO 'Connecting to SQL Server {0}' -Arguments $ServerInstance
-$ServerInfo = Get-SQLServerInfo @ServerParams
+$ServerInfo = Get-SQLServerInfo @SQLParams
 if (!($ServerInfo)) {
     Write-Log -Level ERROR "`tFailed to retrieve server data - EXITING"
     Exit
@@ -368,10 +368,10 @@ Write-Log -Level INFO -Message "Restoring Databases From {0}" -Arguments $SQLBac
 Write-Log -Level DEBUG -Message "`tData Path: {0}" -Arguments $SQLDataPath
 Write-Log -Level DEBUG -Message "`tLog Path : {0}" -Arguments $SQLLogPath
 $RestoreLogFile = Join-Path (Split-Path $logFileName -Parent) "SQLRestore_$(Split-Path $LogFileName -Leaf)"
-$Restores = Invoke-Sqlcmd @ServerParams -Query $Query -Verbose -Variable $Variable 4> $RestoreLogFile
+$Restores = Invoke-Sqlcmd @SQLParams -Query $Query -Verbose -Variable $Variable 4> $RestoreLogFile
 Write-Log -Level INFO -Message "Restored {0} databases from {1}" -Arguments @($Restores.Count, $SQLBackupPath)
 foreach ($db in $Restores) {
-    Invoke-Sqlcmd @ServerParams -Query $DropOrphanedUsersCommand -Database $DB[1] -Verbose
+    Invoke-Sqlcmd @SQLParams -Query $DropOrphanedUsersCommand -Database $DB[1] -Verbose
     Write-Log -Level INFO -Message "Removing Orphaned Users from Database {0}" -Arguments $DB[1]
 }
 Write-Log -Level INFO -Message "Script Completed"
