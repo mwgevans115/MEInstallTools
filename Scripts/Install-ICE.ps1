@@ -1,16 +1,15 @@
 ###Requires -RunAsAdministrator
 param (
-    [Parameter(HelpMessage = "Path to install Services")]
-    $ServiceSoftwarePath = "C:\MNP\Server",
-    [Parameter(HelpMessage = "Path to backup Services")]
+    [Parameter(HelpMessage = "Path to install Client Software")]
+    $ClientSoftwarePath = "C:\MNP\Software",
+    [Parameter(HelpMessage = "Path to backup Software Folder")]
     $SoftwareBackupPath = "C:\MNP\Backup",
     [Parameter(HelpMessage = "Path to install logs")]
     $InstallLogsPath = "C:\MNP\InstallLogs",
     [Parameter(HelpMessage = "URL for sharepoint site")]
     $URL = 'https://mnpmedialtd.sharepoint.com/sites/Releases',
-    [Parameter(HelpMessage = "Sharepoint location for
-    OrderActive Services")]
-    $DocumentFolder = 'Shared Documents\Latest\OrderActive.Services\Unicode'
+    [Parameter(HelpMessage = "Sharepoint location for ICE")]
+    $ICEDocumentFolder = 'Shared Documents\Latest\Ice'
 )
 #region Load Install Support Module
 Remove-Module MEInstallTools -Force -ErrorAction SilentlyContinue
@@ -22,7 +21,7 @@ else {
     Import-Module $Module
 }
 #endregion Load Install Support Module
-Install-Modules -Modules @('PackageManagement', 'Logging', 'SqlServer', '7Zip4Powershell', 'SharePointPnPPowerShellOnline')
+Install-Modules -Modules @('PackageManagement', 'Logging', '7Zip4Powershell', 'SharePointPnPPowerShellOnline')
 #region Initialise
 $MyInvocation.MyCommand.Parameters.Keys | where { -not $PSBoundParameters.ContainsKey($_) -and `
     $_ -notin ([System.Management.Automation.Cmdlet]::CommonParameters) } |
@@ -42,8 +41,11 @@ If (!([string]::IsNullOrEmpty($Message))) {
     Set-Variable -Name $_ -Value $value
 }
 If ((Get-Variable -Name $_).Value -ne $default){
-    Export-Clixml $ParamDataFile -InputObject (Get-Variable -Name $_).Value
-    Get-Item $ParamDataFile -Force | ForEach-Object { $_.Attributes = $_.Attributes -bor "Hidden" }
+    if((Test-Path $ParamDataFile) -and (get-item $ParamDataFile -Force).Attributes.HasFlag([System.IO.FileAttributes]::Hidden)){
+        (get-item $ParamDataFile -force).Attributes -= 'Hidden'
+    }
+    Export-Clixml $ParamDataFile -InputObject (Get-Variable -Name $_).Value -Force
+    (get-item $ParamDataFile -force).Attributes += 'Hidden'
 }
 }
 # Set Script Variables and configure logging
@@ -101,11 +103,11 @@ IF ($param.Value) {
 
 
 #region Backup existing software folder
-$BackupArchive = Join-Path $SoftwareBackupPath "$(Split-Path $ServiceSoftwarePath -Leaf) $(get-date -Format "yyyy-MM-dd HHmm").7z"
+$BackupArchive = Join-Path $SoftwareBackupPath "$(Split-Path $ClientSoftwarePath -Leaf) $(get-date -Format "yyyy-MM-dd HHmm").7z"
 $BackupChanges = Join-Path $SoftwareBackupPath "$scriptName $(get-date -Format "yyyy-MM-dd HHmm").7z"
-if (Get-ChildItem -Path $ServiceSoftwarePath -File -Recurse) {
-    Write-Log -Level WARNING 'Backing up {0} to {1}' -Arguments $ServiceSoftwarePath, $BackupArchive
-    Compress-7Zip -ArchiveFileName $BackupArchive -Path $ServiceSoftwarePath
+if (Get-ChildItem -Path $ClientSoftwarePath -File -Recurse) {
+    Write-Log -Level WARNING 'Backing up {0} to {1}' -Arguments $ClientSoftwarePath, $BackupArchive
+    Compress-7Zip -ArchiveFileName $BackupArchive -Path $ClientSoftwarePath
 }
 #endregion
 
@@ -120,7 +122,7 @@ $PreRequisites = @('https://aka.ms/vs/16/release/vc_redist.x64.exe',
 $PreRequisites | ForEach-Object {
     Write-Log -Level INFO -Message "`t{0}`t{1}" -Arguments (Get-Version $_).ProductName, (Get-Version $_).Version
 }
-$PreRequisiteFolder = Join-Path $ServiceSoftwarePath 'PreRequisites'
+$PreRequisiteFolder = Join-Path $ClientSoftwarePath 'PreRequisites'
 New-Item $PreRequisiteFolder -ItemType Directory -Force | Out-Null
 Start-Sleep -Milliseconds 500
 Write-Log -Level INFO "Moving prerequisites to {0}" -Arguments $PreRequisiteFolder
@@ -130,7 +132,7 @@ $PreRequisites | ForEach-Object {
         If ([Version]((Get-Version $_).Version) -gt
             [Version]((Get-Version (Join-Path $PreRequisiteFolder $_.Name)).Version)) {
             Write-Log -Level WARNING -Message 'Installing PreRequisite {0} {1}' -Arguments (Get-Version $_).ProductName, (Get-Version $_).Version
-            Compress-7Zip -ArchiveFileName $BackupChanges -Path (Join-Path $ServiceSoftwarePath $_.Name) -PreserveDirectoryRoot
+            Compress-7Zip -ArchiveFileName $BackupChanges -Path (Join-Path $ClientSoftwarePath $_.Name) -PreserveDirectoryRoot
             Copy-Item -Path $_.FullName -Destination $PreRequisiteFolder -Force
         }
         else {
@@ -155,8 +157,8 @@ if (Get-CimInstance -ClassName Win32_OperatingSystem | Where-Object { $_.Name -l
 Add-TrustedSite -PrimaryDomain 'sharepoint.com' -SubDomain 'mnpmedialtd'
 Add-TrustedSite -PrimaryDomain 'sharepoint.com' -SubDomain 'mnpmedialtd-files'
 Add-TrustedSite -PrimaryDomain 'sharepoint.com' -SubDomain 'mnpmedialtd-myfiles'
-Write-Log -Level INFO -Message "Downloading {0} from {1}" -Arguments $DocumentFolder, $URL
-$Downloads = Get-SharepointFolder -SiteURI $URL -DocumentFolder $DocumentFolder -UseWebAuth
+Write-Log -Level INFO -Message "Downloading {0} from {1}" -Arguments $ICEDocumentFolder, $URL
+$Downloads = Get-SharepointFolder -SiteURI $URL -DocumentFolder $ICEDocumentFolder -UseWebAuth
 $Downloads | ForEach-Object {
     Write-Log -Level INFO -Message "`t{0}`t{1}" -Arguments $_.Name, $_.LastModifiedTime
 }
@@ -209,13 +211,13 @@ If ($runningServiceList.Count -ne 0 ) {
 
 # Prepare temp folder to backup changed files validate files to update
 Write-Log -Level INFO -Message 'Backing up changed files'
-$TempBackupFolder = New-TempFolder (Split-Path $ServiceSoftwarePath -Leaf)
+$TempBackupFolder = New-TempFolder (Split-Path $ClientSoftwarePath -Leaf)
 [System.Collections.ArrayList]$fileList = @()
 Get-ChildItem -Path (Join-Path $TargetPath '*') -Recurse -Include 'Software' | ForEach-Object {
     $SourcePath = $_.FullName
     Get-ChildItem -Path $SourcePath -Recurse -File | ForEach-Object {
         $SourceFile = $_.FullName
-        $TargetFile = $SourceFile.Replace($SourcePath, $ServiceSoftwarePath)
+        $TargetFile = $SourceFile.Replace($SourcePath, $ClientSoftwarePath)
         $BackupFile = $SourcePath.Replace($SourcePath, $TempBackupFolder.FullName)
         if ((Get-FileHash $SourceFile).Hash -ne (Get-FileHash $TargetFile -ErrorAction SilentlyContinue).Hash) {
             $fileList.Add([pscustomobject]@{
