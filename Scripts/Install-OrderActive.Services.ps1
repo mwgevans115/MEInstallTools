@@ -1,7 +1,7 @@
 ###Requires -RunAsAdministrator
 param (
     [Parameter(HelpMessage = "Path to install Services")]
-    $SoftwarePath = "C:\MNP\Server",
+    $ServiceSoftwarePath = "C:\MNP\Server",
     [Parameter(HelpMessage = "Path to backup Services")]
     $SoftwareBackupPath = "C:\MNP\Backup",
     [Parameter(HelpMessage = "Path to install logs")]
@@ -25,37 +25,45 @@ else {
 Install-Modules -Modules @('PackageManagement', 'Logging', 'SqlServer', '7Zip4Powershell', 'SharePointPnPPowerShellOnline')
 #region Initialise
 $MyInvocation.MyCommand.Parameters.Keys | where { -not $PSBoundParameters.ContainsKey($_) -and `
-        $_ -notin ([System.Management.Automation.Cmdlet]::CommonParameters) } |
+    $_ -notin ([System.Management.Automation.Cmdlet]::CommonParameters) } |
 ForEach-Object {
-    $Param = $MyInvocation.MyCommand.Parameters[$_]
-    $value = $null
-    $Message = $Param.Attributes[0].HelpMessage
-    $default = (Get-Variable -Name $_).Value
-    If (!([string]::IsNullOrEmpty($Message))) {
-        if (!($value = Read-Host "$Message [$default]")) { $value = $default }
-        Set-Variable -Name $_ -Value $value
-    }
+$Param = $MyInvocation.MyCommand.Parameters[$_]
+$value = $null
+$Message = $Param.Attributes[0].HelpMessage
+$ParamDataFile = Join-Path (Split-Path $PROFILE.CurrentUserAllHosts -Parent) "$_.xml"
+if (Test-Path $ParamDataFile) {
+    $default = (Import-Clixml $ParamDataFile)
 }
-
+else {
+    $default = (Get-Variable -Name $_).Value
+}
+If (!([string]::IsNullOrEmpty($Message))) {
+    if (!($value = Read-Host "$Message [$default]")) { $value = $default }
+    Set-Variable -Name $_ -Value $value
+}
+If ((Get-Variable -Name $_).Value -ne $default){
+    Export-Clixml $ParamDataFile -InputObject (Get-Variable -Name $_).Value
+    Get-Item $ParamDataFile -Force | ForEach-Object { $_.Attributes = $_.Attributes -bor "Hidden" }
+}
+}
 # Set Script Variables and configure logging
 New-Item -Path $InstallLogsPath -ItemType Directory -Force | Out-Null
 $scriptName = (Get-ChildItem $MyInvocation.MyCommand.Path).BaseName
 $Date = Get-Date -Format "yyyyMMdd"
 $LastFile = Get-ChildItem (Join-Path $InstallLogsPath "$($scriptName)_$($Date)_*.log") | Sort-Object Name | Select -Last 1
 If ($LastFile) {
-    $LastFile.Name -match '\d+(?=\.)'
-    $Sequence = "{0:D2}" -f (([Int]$Matches[0]) + 1)
+$LastFile.Name -match '\d+(?=\.)'
+$Sequence = "{0:D2}" -f (([Int]$Matches[0]) + 1)
 }
 else {
-    $Sequence = '00'
+$Sequence = '00'
 }
-#$logFileName = Join-Path $InstallLogsPath "$($scriptName)_%{+%Y%m%d}.log"
 $logFileName = Join-Path $InstallLogsPath "$($scriptName)_$($Date)_$Sequence.log"
 Set-LoggingDefaultLevel -Level 'DEBUG'
 Set-LoggingDefaultFormat '[%{timestamp:+%T%Z}] [%{level:-7}] %{message}'
 Add-LoggingTarget -Name Console -Configuration @{Format = '[%{timestamp:+%T} %{level:-7}] %{message}' }
 Add-LoggingTarget -Name File -Configuration @{Path = $logFileName
-    Format                                         = '[%{timestamp:+%T%Z}] [%{level:-7}] %{message}'
+Format                                         = '[%{timestamp:+%T%Z}] [%{level:-7}] %{message}'
 }
 Write-Log -Level INFO -Message "Running Script $scriptName"
 
@@ -63,40 +71,41 @@ Write-Log -Level INFO -Message "Running Script $scriptName"
 $Title = " Parameter Values "
 Write-Log -Level INFO -Message '{0}' -Arguments $Title.PadLeft(40 + ($Title.Length / 2), '*').PadRight(80, '*')
 $Length = ($MyInvocation.MyCommand.Parameters.Keys | where {
-        $_ -notin ([System.Management.Automation.Cmdlet]::CommonParameters) } | Sort-Object { $_.name.length }  | select -last 1).length
+    $_ -notin ([System.Management.Automation.Cmdlet]::CommonParameters) } | Sort-Object { $_.name.length }  | select -last 1).length
 $MyInvocation.MyCommand.Parameters.Keys | where {
-    $_ -notin ([System.Management.Automation.Cmdlet]::CommonParameters) } |
+$_ -notin ([System.Management.Automation.Cmdlet]::CommonParameters) } |
 ForEach-Object {
-    $param = Get-Variable -Name $_
-    Write-Log -Level INFO -Message "`t{0}:`t{1}" -Arguments @($param.Name.PadRight($Length, ' '), $param.Value)
-    #Write-Verbose "$($param.Name) --> $($param.Value)"
+$param = Get-Variable -Name $_
+Write-Log -Level INFO -Message "`t{0}:`t{1}" -Arguments @($param.Name.PadRight($Length, ' '), $param.Value)
+#Write-Verbose "$($param.Name) --> $($param.Value)"
 }
 $Title = ""
 Write-Log -Level INFO -Message '{0}' -Arguments $Title.PadLeft(40 + ($Title.Length / 2), '*').PadRight(80, '*')
 
 # Create all Path's set in parameters
 $MyInvocation.MyCommand.Parameters.Keys | where {
-    $_ -notin ([System.Management.Automation.Cmdlet]::CommonParameters) -and $_ -like '*Path*' } |
+$_ -notin ([System.Management.Automation.Cmdlet]::CommonParameters) -and $_ -like '*Path*' } |
 ForEach-Object {
-    $param = Get-Variable -Name $_
-    IF ($param.Value) {
-        If (Test-Path -Path $param.Value -PathType Container) {
-            Write-Log -Level INFO -Message '{0} folder {1} exists' -Arguments @($param.Name, $param.Value)
-        }
-        else {
-            New-Item -Path $param.Value -Force -ItemType Directory | Out-Null
-            Write-Log -Level WARNING -Message '{0} folder {1} created' -Arguments @($param.Name, $param.Value)
-        }
+$param = Get-Variable -Name $_
+IF ($param.Value) {
+    If (Test-Path -Path $param.Value -PathType Container) {
+        Write-Log -Level INFO -Message '{0} folder {1} exists' -Arguments @($param.Name, $param.Value)
     }
+    else {
+        New-Item -Path $param.Value -Force -ItemType Directory | Out-Null
+        Write-Log -Level WARNING -Message '{0} folder {1} created' -Arguments @($param.Name, $param.Value)
+    }
+}
 }
 #endregion
 
+
 #region Backup existing software folder
-$BackupArchive = Join-Path $SoftwareBackupPath "$(Split-Path $SoftwarePath -Leaf) $(get-date -Format "yyyy-MM-dd HHmm").7z"
+$BackupArchive = Join-Path $SoftwareBackupPath "$(Split-Path $ServiceSoftwarePath -Leaf) $(get-date -Format "yyyy-MM-dd HHmm").7z"
 $BackupChanges = Join-Path $SoftwareBackupPath "$scriptName $(get-date -Format "yyyy-MM-dd HHmm").7z"
-if (Get-ChildItem -Path $SoftwarePath -File -Recurse) {
-    Write-Log -Level WARNING 'Backing up {0} to {1}' -Arguments $SoftwarePath, $BackupArchive
-    Compress-7Zip -ArchiveFileName $BackupArchive -Path $SoftwarePath
+if (Get-ChildItem -Path $ServiceSoftwarePath -File -Recurse) {
+    Write-Log -Level WARNING 'Backing up {0} to {1}' -Arguments $ServiceSoftwarePath, $BackupArchive
+    Compress-7Zip -ArchiveFileName $BackupArchive -Path $ServiceSoftwarePath
 }
 #endregion
 
@@ -111,7 +120,7 @@ $PreRequisites = @('https://aka.ms/vs/16/release/vc_redist.x64.exe',
 $PreRequisites | ForEach-Object {
     Write-Log -Level INFO -Message "`t{0}`t{1}" -Arguments (Get-Version $_).ProductName, (Get-Version $_).Version
 }
-$PreRequisiteFolder = Join-Path $SoftwarePath 'PreRequisites'
+$PreRequisiteFolder = Join-Path $ServiceSoftwarePath 'PreRequisites'
 New-Item $PreRequisiteFolder -ItemType Directory -Force | Out-Null
 Start-Sleep -Milliseconds 500
 Write-Log -Level INFO "Moving prerequisites to {0}" -Arguments $PreRequisiteFolder
@@ -121,7 +130,7 @@ $PreRequisites | ForEach-Object {
         If ([Version]((Get-Version $_).Version) -gt
             [Version]((Get-Version (Join-Path $PreRequisiteFolder $_.Name)).Version)) {
             Write-Log -Level WARNING -Message 'Installing PreRequisite {0} {1}' -Arguments (Get-Version $_).ProductName, (Get-Version $_).Version
-            Compress-7Zip -ArchiveFileName $BackupChanges -Path (Join-Path $SoftwarePath $_.Name) -PreserveDirectoryRoot
+            Compress-7Zip -ArchiveFileName $BackupChanges -Path (Join-Path $ServiceSoftwarePath $_.Name) -PreserveDirectoryRoot
             Copy-Item -Path $_.FullName -Destination $PreRequisiteFolder -Force
         }
         else {
@@ -200,13 +209,13 @@ If ($runningServiceList.Count -ne 0 ) {
 
 # Prepare temp folder to backup changed files validate files to update
 Write-Log -Level INFO -Message 'Backing up changed files'
-$TempBackupFolder = New-TempFolder (Split-Path $SoftwarePath -Leaf)
+$TempBackupFolder = New-TempFolder (Split-Path $ServiceSoftwarePath -Leaf)
 [System.Collections.ArrayList]$fileList = @()
 Get-ChildItem -Path (Join-Path $TargetPath '*') -Recurse -Include 'Software' | ForEach-Object {
     $SourcePath = $_.FullName
     Get-ChildItem -Path $SourcePath -Recurse -File | ForEach-Object {
         $SourceFile = $_.FullName
-        $TargetFile = $SourceFile.Replace($SourcePath, $SoftwarePath)
+        $TargetFile = $SourceFile.Replace($SourcePath, $ServiceSoftwarePath)
         $BackupFile = $SourcePath.Replace($SourcePath, $TempBackupFolder.FullName)
         if ((Get-FileHash $SourceFile).Hash -ne (Get-FileHash $TargetFile -ErrorAction SilentlyContinue).Hash) {
             $fileList.Add([pscustomobject]@{

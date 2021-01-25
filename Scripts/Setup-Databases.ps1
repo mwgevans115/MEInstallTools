@@ -261,36 +261,45 @@ DATA DropOrphanedUsersCommand {
 # Get User Input for Parameters not explicitly set
 #region Initialise
 $MyInvocation.MyCommand.Parameters.Keys | where { -not $PSBoundParameters.ContainsKey($_) -and `
-        $_ -notin ([System.Management.Automation.Cmdlet]::CommonParameters) } |
+    $_ -notin ([System.Management.Automation.Cmdlet]::CommonParameters) } |
 ForEach-Object {
-    $Param = $MyInvocation.MyCommand.Parameters[$_]
-    $value = $null
-    $Message = $Param.Attributes[0].HelpMessage
-    $default = (Get-Variable -Name $_).Value
-    If (!([string]::IsNullOrEmpty($Message))) {
-        if (!($value = Read-Host "$Message [$default]")) { $value = $default }
-        Set-Variable -Name $_ -Value $value
-    }
+$Param = $MyInvocation.MyCommand.Parameters[$_]
+$value = $null
+$Message = $Param.Attributes[0].HelpMessage
+$ParamDataFile = Join-Path (Split-Path $PROFILE.CurrentUserAllHosts -Parent) "$_.xml"
+if (Test-Path $ParamDataFile) {
+    $default = (Import-Clixml $ParamDataFile)
 }
-
+else {
+    $default = (Get-Variable -Name $_).Value
+}
+If (!([string]::IsNullOrEmpty($Message))) {
+    if (!($value = Read-Host "$Message [$default]")) { $value = $default }
+    Set-Variable -Name $_ -Value $value
+}
+If ((Get-Variable -Name $_).Value -ne $default){
+    Export-Clixml $ParamDataFile -InputObject (Get-Variable -Name $_).Value
+    Get-Item $ParamDataFile -Force | ForEach-Object { $_.Attributes = $_.Attributes -bor "Hidden" }
+}
+}
 # Set Script Variables and configure logging
 New-Item -Path $InstallLogsPath -ItemType Directory -Force | Out-Null
 $scriptName = (Get-ChildItem $MyInvocation.MyCommand.Path).BaseName
 $Date = Get-Date -Format "yyyyMMdd"
 $LastFile = Get-ChildItem (Join-Path $InstallLogsPath "$($scriptName)_$($Date)_*.log") | Sort-Object Name | Select -Last 1
-If ($LastFile){
-    $LastFile.Name -match '\d+(?=\.)'
-    $Sequence = "{0:D2}" -f (([Int]$Matches[0])+1)
-} else {
-    $Sequence = '00'
+If ($LastFile) {
+$LastFile.Name -match '\d+(?=\.)'
+$Sequence = "{0:D2}" -f (([Int]$Matches[0]) + 1)
 }
-#$logFileName = Join-Path $InstallLogsPath "$($scriptName)_%{+%Y%m%d}.log"
+else {
+$Sequence = '00'
+}
 $logFileName = Join-Path $InstallLogsPath "$($scriptName)_$($Date)_$Sequence.log"
 Set-LoggingDefaultLevel -Level 'DEBUG'
 Set-LoggingDefaultFormat '[%{timestamp:+%T%Z}] [%{level:-7}] %{message}'
 Add-LoggingTarget -Name Console -Configuration @{Format = '[%{timestamp:+%T} %{level:-7}] %{message}' }
 Add-LoggingTarget -Name File -Configuration @{Path = $logFileName
-    Format                                         = '[%{timestamp:+%T%Z}] [%{level:-7}] %{message}'
+Format                                         = '[%{timestamp:+%T%Z}] [%{level:-7}] %{message}'
 }
 Write-Log -Level INFO -Message "Running Script $scriptName"
 
@@ -298,33 +307,34 @@ Write-Log -Level INFO -Message "Running Script $scriptName"
 $Title = " Parameter Values "
 Write-Log -Level INFO -Message '{0}' -Arguments $Title.PadLeft(40 + ($Title.Length / 2), '*').PadRight(80, '*')
 $Length = ($MyInvocation.MyCommand.Parameters.Keys | where {
-        $_ -notin ([System.Management.Automation.Cmdlet]::CommonParameters) } | Sort-Object { $_.name.length }  | select -last 1).length
+    $_ -notin ([System.Management.Automation.Cmdlet]::CommonParameters) } | Sort-Object { $_.name.length }  | select -last 1).length
 $MyInvocation.MyCommand.Parameters.Keys | where {
-    $_ -notin ([System.Management.Automation.Cmdlet]::CommonParameters) } |
+$_ -notin ([System.Management.Automation.Cmdlet]::CommonParameters) } |
 ForEach-Object {
-    $param = Get-Variable -Name $_
-    Write-Log -Level INFO -Message "`t{0}:`t{1}" -Arguments @($param.Name.PadRight($Length, ' '), $param.Value)
-    #Write-Verbose "$($param.Name) --> $($param.Value)"
+$param = Get-Variable -Name $_
+Write-Log -Level INFO -Message "`t{0}:`t{1}" -Arguments @($param.Name.PadRight($Length, ' '), $param.Value)
+#Write-Verbose "$($param.Name) --> $($param.Value)"
 }
 $Title = ""
 Write-Log -Level INFO -Message '{0}' -Arguments $Title.PadLeft(40 + ($Title.Length / 2), '*').PadRight(80, '*')
 
 # Create all Path's set in parameters
 $MyInvocation.MyCommand.Parameters.Keys | where {
-    $_ -notin ([System.Management.Automation.Cmdlet]::CommonParameters) -and $_ -like '*Path*' } |
+$_ -notin ([System.Management.Automation.Cmdlet]::CommonParameters) -and $_ -like '*Path*' } |
 ForEach-Object {
-    $param = Get-Variable -Name $_
-    IF ($param.Value) {
-        If (Test-Path -Path $param.Value -PathType Container) {
-            Write-Log -Level INFO -Message '{0} folder {1} exists' -Arguments @($param.Name, $param.Value)
-        }
-        else {
-            New-Item -Path $param.Value -Force -ItemType Directory | Out-Null
-            Write-Log -Level WARNING -Message '{0} folder {1} created' -Arguments @($param.Name, $param.Value)
-        }
+$param = Get-Variable -Name $_
+IF ($param.Value) {
+    If (Test-Path -Path $param.Value -PathType Container) {
+        Write-Log -Level INFO -Message '{0} folder {1} exists' -Arguments @($param.Name, $param.Value)
+    }
+    else {
+        New-Item -Path $param.Value -Force -ItemType Directory | Out-Null
+        Write-Log -Level WARNING -Message '{0} folder {1} created' -Arguments @($param.Name, $param.Value)
     }
 }
+}
 #endregion
+
 $SQLParams = @{
     ServerInstance = $ServerInstance
 }

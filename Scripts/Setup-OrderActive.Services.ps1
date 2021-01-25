@@ -41,13 +41,22 @@ ForEach-Object {
     $Param = $MyInvocation.MyCommand.Parameters[$_]
     $value = $null
     $Message = $Param.Attributes[0].HelpMessage
-    $default = (Get-Variable -Name $_).Value
+    $ParamDataFile = Join-Path (Split-Path $PROFILE.CurrentUserAllHosts -Parent) "$_.xml"
+    if (Test-Path $ParamDataFile) {
+        $default = (Import-Clixml $ParamDataFile)
+    }
+    else {
+        $default = (Get-Variable -Name $_).Value
+    }
     If (!([string]::IsNullOrEmpty($Message))) {
         if (!($value = Read-Host "$Message [$default]")) { $value = $default }
         Set-Variable -Name $_ -Value $value
     }
+    If ((Get-Variable -Name $_).Value -ne $default){
+        Export-Clixml $ParamDataFile -InputObject (Get-Variable -Name $_).Value
+        Get-Item $ParamDataFile -Force | ForEach-Object { $_.Attributes = $_.Attributes -bor "Hidden" }
+    }
 }
-
 # Set Script Variables and configure logging
 New-Item -Path $InstallLogsPath -ItemType Directory -Force | Out-Null
 $scriptName = (Get-ChildItem $MyInvocation.MyCommand.Path).BaseName
@@ -106,7 +115,8 @@ $InitMNPServiceCfgScript = (Get-ChildItem (Join-Path $ServiceSoftwarePath '*') -
 $SQLParams = @{
     ServerInstance = $ServerInstance
 }
-$RequiredDatabases = @('OrderActive', 'MNPServiceCfg', 'MNPCalendar', 'MNPUserMaster', 'Fred')
+
+$RequiredDatabases = @('OrderActive', 'MNPServiceCfg', 'MNPCalendar', 'MNPUserMaster')
 $AvailableDatabases = @()
 $OrderActiveUserrole = 'db_owner'
 #region orderactivecredentials
@@ -216,18 +226,18 @@ $QueryAddLoginToRole = @"
     WHERE SUSER_SID(`$(LOGIN))=sys.database_principals.sid
     ALTER ROLE [`$(ROLE)] ADD MEMBER [`$(LOGIN)]
 "@
-$Variable = @("ROLE=$OrderActiveUserRole","LOGIN=$($OrderActiveUserCredential.UserName)")
+$Variable = @("ROLE=$OrderActiveUserRole", "LOGIN=$($OrderActiveUserCredential.UserName)")
 $AvailableDatabases | ForEach-Object {
     $DB = $_
     Write-Log -Level INFO -Message "Checking User Role on {0}" -Arguments $DB
     switch (Test-DBLoginIsInRole -Database $_ -DBLogin $OrderActiveUserCredential.UserName -DBRole $OrderActiveUserRole) {
         $null {
             Write-Log -Level WARNING "`tLogin {0} not mapped to database {1}" -Arguments $OrderActiveUserCredential.UserName, 'CREATING'
-            Invoke-Sqlcmd @SQLParams -Query $QueryAddLogin -Variable $Variable -Database $DB -Verbose
+            Invoke-Sqlcmd @SQLParams -Query $QueryAddLogin -Variable $Variable -Database $DB
         }
         $true {
             Write-Log -Level DEBUG "`tLogin {0} in role {1} on database" -Arguments $OrderActiveUserCredential.UserName, $OrderActiveUserRole
-          }
+        }
         $false {
             Write-Log -Level WARNING "`tLogin {0} in role {1} on database {2}" -Arguments $OrderActiveUserCredential.UserName, $OrderActiveUserRole, 'ADDING'
             Invoke-Sqlcmd @SQLParams -Query $QueryAddLoginToRole -Variable $Variable -Database $DB
@@ -272,7 +282,7 @@ $ConsoleSettings.Format = $NewFormat
 Wait-Logging
 Add-LoggingTarget -Name Console -Configuration $ConsoleSettings
 foreach ($prereq in $PreReequisites) {
-    If ($false -eq (Install-Software $prereq)){$PreRequisites=$false}
+    If ($false -eq (Install-Software $prereq)) { $PreRequisites = $false }
 }
 Wait-Logging
 $ConsoleSettings.Format = $Format
@@ -355,12 +365,28 @@ Write-Log -Level WARNING -Message "`tRemoving Existing Data from MNPServiceCfg"
 $VersionString = (Select-String -Pattern '\$Version.*?$' -Path $InitMNPServiceCfgScript).Matches[0].Value.Replace('$', '').Replace('=', ' ')
 Write-Log -Level WARNING -Message "`tExecuting SQL Script {0} - {1}" -Arguments (Split-Path $InitMNPServiceCfgScript -Leaf), $VersionString
 Invoke-Sqlcmd @SQLParams -InputFile $InitMNPServiceCfgScript -Database 'MNPServiceCfg'
+$PathUpdateQuery = @"
+
+    UPDATE WebRelayInstance SET
+          [OrphanedFilesDirectory] = '`$(OrderFiles)\Orphaned'
+        , [XMLErrorDirectory] = '`$(OrderFiles)\Error'
+        , [XMLPollDirectory] = '`$(OrderFiles)'
+        , [XMLProcessedDirectory] = '`$(OrderFiles)\Processed'
+    WHERE
+        ISNULL([XMLPollDirectory],'') = ''
+
+    UPDATE CONSOLEHEADER SET LOGFILE = '`$(LogFiles)\Console.log' WHERE ISNULL([LOGFILE],'') = ''
+    UPDATE DISTRIBUTEHEADER SET LOGFILE = '`$(LogFiles)\Distribute.log' WHERE ISNULL([LOGFILE],'') = ''
+    UPDATE MESSAGINGHEADER SET LOGFILE = '`$(LogFiles)\Messaging.log' WHERE ISNULL([LOGFILE],'') = ''
+    UPDATE WEBRELAYHEADER SET LOGFILE = '`$(LogFiles)\WebRelay.log' WHERE ISNULL([LOGFILE],'') = ''
+"@
 $QuerySetColumnValue = @"
 DECLARE @SQL VARCHAR(MAX)
 SELECT @SQL = COALESCE(@SQL + CHAR(10),'') +
         'UPDATE ' + object_name(object_id) +
         ' SET [`$(ColumnName)] = N''`$(ColumnValue)'''
 FROM  SYS.columns WITH (NOLOCK) where name LIKE '`$(ColumnName)'
+PRINT @SQL
 EXEC (@SQL)
 "@
 $QueryReplaceInColumnValue = @"
@@ -369,12 +395,17 @@ SELECT @SQL = COALESCE(@SQL + CHAR(10),'') +
         'UPDATE ' + object_name(object_id) +
         ' SET [' + name + '] = REPLACE([' + name + '], ''`$(String)'', ''`$(Replacement)'')'
 FROM  SYS.columns WITH (NOLOCK) where name LIKE '`$(ColumnName)'
-	AND TYPE_NAME(system_type_id) IN ('nchar','nvarchar','char','varchar')
+    AND TYPE_NAME(system_type_id) IN ('nchar','nvarchar','char','varchar')
+PRINT @SQL
 EXEC (@SQL)
 "@
 Write-Log -Level WARNING -Message "Updating MNPServiceCfg Data"
 Write-Log -Level INFO -Message "`tUpdating Column {0} Setting value to {1}" -Arguments 'IPAddress', $IPAddress.IPAddress
 try {
+    Write-Log -Level INFO -Message "`tUpdating Empty Paths" -Arguments 'Port', $Port
+    SqlServer\Invoke-Sqlcmd @SQLParams -Database 'MNPServiceCfg' `
+        -Query $PathUpdateQuery `
+        -Variable @("OrderFiles=$OrderFilesPath","LogFiles=$ServiceLogPath")
     SQLSERVER\Invoke-Sqlcmd @SQLParams  -Database 'MNPServiceCfg' `
         -Query $QuerySetColumnValue `
         -Variable @("ColumnName=IPAddress", "ColumnValue=$($IPAddress.IPAddress)")
@@ -418,7 +449,47 @@ foreach ($row in $WebRelayInstanceDataRows) {
 #endregion
 if ($false -ne $PreRequisites) {
     # Run Service Applicationss
-} else {
+    #region
+    # Run Service Applications to test install
+    $ServiceApplications = @('MNPSocketSvc', 'WebRelaySvc', 'DistributeSvc', 'MNPAppConsole')
+    $plaintext = ConvertTo-PlainText $OrderActiveUserCredential.Password
+    $TempFile = New-TemporaryFile
+    $ConnectionString = "Driver=SQL Server Native Client 11.0;Server=$($SQLParams.ServerInstance);Database=OrderActive;Uid=$($OrderActiveUserCredential.UserName);Pwd=$PlainText;App=;"
+    Set-Content $TempFile $ConnectionString
+    & notepad.exe $TempFile
+    Start-Sleep -Seconds 1
+    Remove-Item $TempFile
+    foreach ($app in $ServiceApplications) {
+        Set-Clipboard $plaintext
+        If (Test-Path "$app.html") { Start-Process "$app.html" }
+        $AppPath = Join-Path $ServiceSoftwarePath $app
+        If (!($AppPath.EndsWith('.exe'))) {
+            $AppPath += ".exe"
+        }
+
+
+        If (Test-Path $AppPath) {
+            Write-Log -Level INFO -Message 'Starting {0} for installation' -Arguments $app
+            $AppProcess = Start-Process $AppPath -PassThru
+            #Wait for App Process to complete
+            while (!($AppProcess.HasExited)) {
+
+            }
+            $Service = Get-CimInstance -ClassName win32_service | Where-Object { $_.PathName -like """$AppPath*" } #| Select Name, DisplayName, State, PathName
+            if ($Service) {
+                Write-Log -Level INFO -Message 'Service Installed "{0}" and currently {1}' -Arguments @($Service.Name, $Service.State)
+            }
+            elseif (!($App -like "MNPAppConsole*")) {
+                Write-Log -Level WARNING -Message 'Service {0} Not Installed' -Arguments $App
+            }
+        }
+        else {
+            Write-Log -Level ERROR -Message "Application {0} Not Found" -Arguments $AppPath
+        }
+    }
+    #endregion
+}
+else {
     Write-Log -Level ERROR -Message "Not All PreRequisites fulfilled check log {0}" -Arguments $logFileName
     & notepad.exe "$logFileName"
 }
