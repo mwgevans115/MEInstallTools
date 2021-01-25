@@ -33,7 +33,7 @@ else {
     Import-Module $Module
 }
 #endregion Load Install Support Module
-##Install-Modules -Modules @('PackageManagement', 'Logging', 'SqlServer')
+Install-Modules -Modules @('PackageManagement', 'Logging', 'SqlServer')
 #region Initialise
 $MyInvocation.MyCommand.Parameters.Keys | where { -not $PSBoundParameters.ContainsKey($_) -and `
         $_ -notin ([System.Management.Automation.Cmdlet]::CommonParameters) } |
