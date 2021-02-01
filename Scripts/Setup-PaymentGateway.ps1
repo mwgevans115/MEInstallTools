@@ -100,9 +100,9 @@ ForEach-Object {
 
 # Check Objects
 $Regex = '(?<=\$Version:\s*)\b\d+\.\d+(?=\s*\$)' #extracts version number
-$obj = Get-ObjectsFromDatabase -ServerInstance localhost -Database OrderActive | Where { $_.name -in @('usp_AddEditKeyData', 'usp_GetAllKeySets', 'usp_UpdatePrivateKey') } | Select name, @{n = 'ver'; e = { $_.routine_definition -match $Regex | Out-Null; $Matches[0] } } , routine_definition
-foreach ($obj in $collection) {
-    Write-Log -Level DEBUG -Message "Object {0} - Version:{1}" -Arguments $obj.name, $obj.ver
+$objects = Get-ObjectsFromDatabase -ServerInstance localhost -Database OrderActive | Where { $_.name -in @('usp_AddEditKeyData', 'usp_GetAllKeySets', 'usp_UpdatePrivateKey') } | Select name, @{n = 'ver'; e = { $_.routine_definition -match $Regex | Out-Null; $Matches[0] } } , routine_definition
+foreach ($obj in $objects) {
+    Write-Log -Level DEBUG -Message "Object {0} `t- Version:{1}" -Arguments $obj.name, $obj.ver
 }
 if (
     (Invoke-Sqlcmd -Query 'SELECT CHARACTER_SET_NAME
@@ -115,16 +115,16 @@ else {
     $MessageEncoding = 'ASCII'
 }
 # update Gateway.xml
-$x = (Get-Content C:\OrderactiveSQL\PaymentGateway\Software\Gateway.xml) -as [XML]
+$x = (Get-Content (Join-Path $PaymentGatewaySoftwarePath Gateway.xml)) -as [XML]
 $Port = [int]$x.DocumentElement.SelectSingleNode('//Port').'#text'
 if ($Port -in (Get-ListeningTCPConnections | Select -ExpandProperty ListeningPort -Unique)) {
     $NewPort = Compare-Object ($Port..($Port + 1000)) (Get-ListeningTCPConnections | Select -ExpandProperty ListeningPort -Unique) | Where-object { $_.SideIndicator -eq '<=' } | Select -ExpandProperty InputObject -First 1
     $x.DocumentElement.SelectSingleNode('//Port').'#text' = "$NewPort"
 }
-$x.DocumentElement.SelectSingleNode('//IPAddress').'#text' = 'localhost'
+$x.DocumentElement.SelectSingleNode('//IPAddress').'#text' = '127.0.0.1'
 $x.DocumentElement.SelectSingleNode('//LogDirectory').'#text' = "$ServiceLogPath"
 $x.DocumentElement.SelectSingleNode('//MessageEncoding').'#text' = $MessageEncoding
-$x.Save('C:\OrderactiveSQL\PaymentGateway\Software\Gateway.xml')
+$x.Save("$(Join-Path $PaymentGatewaySoftwarePath Gateway.xml)")
 
 Start-Process -FilePath (Join-Path $PaymentGatewaySoftwarePath Install.bat) -WorkingDirectory "$PaymentGatewaySoftwarePath"
 $Title = "Checking Success"
@@ -136,7 +136,7 @@ switch ($opt) {
     0 { Write-Log -Level INFO "`tPayment Gateway Reported as Installed OK" }
     1 { Write-Log -Level ERROR "`tPayment Gateway Install failed"; Exit }
 }
-Set-Clipboard Password
-Start-Process C:\OrderactiveSQL\PaymentGateway\Software\GatewayAdmin.exe
+Set-Clipboard (ConvertTo-PlainText (Get-CredentialManagerCredential -Target mnp -User OrderActive).SecurePass)
+Start-Process (Join-Path $PaymentGatewaySoftwarePath 'GatewayAdmin.exe') -WorkingDirectory $PaymentGatewaySoftwarePath
 
 
