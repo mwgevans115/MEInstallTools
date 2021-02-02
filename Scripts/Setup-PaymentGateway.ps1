@@ -97,6 +97,8 @@ ForEach-Object {
 }
 #endregion
 
+Needs tidying up
+Install-WindowsFeature -Name "NET-Framework-Core"
 
 # Check Objects
 $Regex = '(?<=\$Version:\s*)\b\d+\.\d+(?=\s*\$)' #extracts version number
