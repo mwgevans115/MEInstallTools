@@ -18,27 +18,28 @@ Function Get-DefaultLogPath {
     .LINK
 
     #>
-
-        [CmdletBinding()]
-        param(
-            [Parameter(
-                Mandatory = $true,
-                Position = 0
-                )]
-            [pscustomobject]$ScriptFileInfo
-        )
-        #BasePath
-        $Path = $env:APPDATA
-        #CompanyName
-        If ($ScriptFileInfo.CompanyName){$Path = Join-Path $Path $ScriptFileInfo.CompanyName}
-        #ProductName
-        If ($ScriptFileInfo.Name){$Path = Join-Path $Path $ScriptFileInfo.Name}
-        #ProductVersion
-        If ($ScriptFileInfo.Version){$Path = Join-Path $Path $ScriptFileInfo.Version}
-        If (Test-Path $Path -IsValid){
-            return $Path
-        } else {
-            return $Env:TEMP
-        }
+    [OutputType([string])]
+    [CmdletBinding()]
+    param(
+        [Parameter(
+            Mandatory = $true,
+            Position = 0
+        )]
+        [pscustomobject]$ScriptFileInfo
+    )
+    #BasePath
+    $Path = $env:APPDATA
+    #CompanyName
+    If ($ScriptFileInfo.CompanyName) { $Path = Join-Path $Path $ScriptFileInfo.CompanyName }
+    #ProductName
+    If ($ScriptFileInfo.Name) { $Path = Join-Path $Path $ScriptFileInfo.Name }
+    #ProductVersion
+    If ($ScriptFileInfo.Version) { $Path = Join-Path $Path $ScriptFileInfo.Version }
+    If (Test-Path $Path -IsValid) {
+        return $Path
     }
-    #Get-DefaultLogPath -ScriptFileInfo (Test-ScriptFileInfo -Path .\Scripts\New-ScriptFile1.ps1)
+    else {
+        return $Env:TEMP
+    }
+}
+#Get-DefaultLogPath -ScriptFileInfo (Test-ScriptFileInfo -Path .\Scripts\New-ScriptFile1.ps1)
