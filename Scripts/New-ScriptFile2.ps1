@@ -3,7 +3,7 @@
 
 .VERSION 0.0.1
 
-.GUID 2dcc6677-0849-4f50-b440-75b7e13fe5c0
+.GUID 166f5383-8be2-437c-9c15-de7703c4c4ae
 
 .AUTHOR Mark Evans <mark.evans@mnpthesolution.com>
 
@@ -19,7 +19,7 @@
 
 .ICONURI
 
-.EXTERNALMODULEDEPENDENCIES
+.EXTERNALMODULEDEPENDENCIES 
 
 .REQUIREDSCRIPTS
 
@@ -32,7 +32,7 @@
 
 #>
 
-<#
+<# 
 
 .SYNOPSIS
   <Overview of script>
@@ -52,38 +52,57 @@
 .NOTES
   Version:        0.0.1
   Author:         Mark Evans <mark.evans@mnpthesolution.com>
-  Creation Date:  02/02/2021
+  Creation Date:  03/02/2021
   Purpose/Change: Initial script development
 
 .EXAMPLE
   <Example goes here. Repeat this attribute for more than one example>
-#>[CmdletBinding()]
+#>
+[CmdletBinding()]
 param (
     # Parameter with help message can have default changed by user/data file
     [Parameter(HelpMessage = "Prompt Displayed to User")]
     #[TypeName]
-    ='<default>',
+    $ParameterName='<default>',
     [Parameter()]
     #[TypeName]
-    ='<default>'
+    $ParameterName1='<default>'
 )
-#region --------------------------------------------------[Initialisations]--------------------------------------------------------
+#region ---------------------------------------------------[Declarations]----------------------------------------------------------
+DATA required_modules {@('Logging')}
+DATA logging_defaultlevel {''} #Set to override powershell log levels
 
+#endregion
+#region --------------------------------------------------[Initialisations]--------------------------------------------------------
 #Set Error Action to Silently Continue
 #$ErrorActionPreference = "SilentlyContinue"
 
+Remove-Module MEInstallTools -Force -ErrorAction SilentlyContinue
+If (Get-Module -ListAvailable -Name MEInstallTools) {
+  Import-Module MEInstallTools
+}
+else {
+  $Module = (Get-ChildItem -Path .\src\* -Recurse -Include 'MEInstallTools.psd1' | Select -First 1).FullName
+  Import-Module $Module
+}
+
 #Load required Modules
-#endregion
-#region ---------------------------------------------------[Declarations]----------------------------------------------------------
+Install-Modules -Modules $required_modules
 
 #Script Version
-Test-ScriptFileInfo $MyInvocation.MyCommand.Path
-$sScriptVersion = "1.0"
+#$oScriptInfo = Test-ScriptFileInfo -LiteralPath ($MyInvocation.MyCommand.Path)
 
-#Log File Info
-$sLogPath = "C:\Windows\Temp"
-$sLogName = "<script_name>.log"
-$sLogFile = Join-Path -Path $sLogPath -ChildPath $sLogName
+#Set Log File
+$fLogFile = Get-LogFile
+
+#Initialise Logging
+Set-InitialLogging $fLogFile.FullName 'debug' '[%{timestamp:+%T} %{level:-7}] %{message}'
+Write-LogHeader
+
+#Allow user to enter parameters
+Read-ScriptParameter -UseStored:$save_defaultparametervalues
+Write-LogScriptParameter
+
 #endregion
 #region ----------------------------------------------------[Functions]------------------------------------------------------------
 
@@ -102,49 +121,7 @@ Function <FunctionName>{
     }
 
     Catch{
-      Log-Error -LogPath $sLogFile -ErrorDesc
-<#PSScriptInfo
-
-.VERSION 0.0.1
-
-.GUID 2dcc6677-0849-4f50-b440-75b7e13fe5c0
-
-.AUTHOR Mark Evans <mark.evans@mnpthesolution.com>
-
-.COMPANYNAME MNP
-
-.COPYRIGHT 2021 MNP. All rights reserved.
-
-.TAGS
-
-.LICENSEURI
-
-.PROJECTURI
-
-.ICONURI
-
-.EXTERNALMODULEDEPENDENCIES
-
-.REQUIREDSCRIPTS
-
-.EXTERNALSCRIPTDEPENDENCIES
-
-.RELEASENOTES
-
-
-.PRIVATEDATA
-
-#>
-
-<#
-
-.DESCRIPTION
- My new script file test
-
-#>
-Param()
-
-.Exception -ExitGracefully $True
+      Log-Error -LogPath $sLogFile -ErrorDesc $_.Exception -ExitGracefully $True
       Break
     }
   }
